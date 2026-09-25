@@ -102,6 +102,8 @@ export class App {
   private fileTarget: Side = 'a';
   private popAnchor: HTMLElement | null = null;
   private rulerFrame = 0;
+  /** The reader scrolled by hand since the last jump to a change. */
+  private userScrolled = false;
 
   constructor(private readonly host: HTMLElement) {
     this.loadPrefs();
@@ -231,6 +233,18 @@ export class App {
     this.el.scroller.addEventListener('scroll', () => {
       this.closePop();
       this.scheduleRuler();
+    });
+    const manual = () => {
+      this.userScrolled = true;
+    };
+    this.el.scroller.addEventListener('wheel', manual, { passive: true });
+    this.el.scroller.addEventListener('touchmove', manual, { passive: true });
+    this.el.scroller.addEventListener('pointerdown', (e) => {
+      // A press on the scroller itself (not its content) is the scrollbar.
+      if (e.target === this.el.scroller) manual();
+    });
+    this.el.scroller.addEventListener('keydown', (e) => {
+      if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) manual();
     });
     this.el.ruler.addEventListener('click', (e) => this.onRulerClick(e));
     window.addEventListener('resize', () => {
@@ -658,9 +672,12 @@ export class App {
       parts.push(
         `<span><b>Sample drafts.</b> Replace A and B with your own documents, or drop two files anywhere on the page.</span><button type="button" class="btn sm" data-cmd="clear">Use my own documents</button>`,
       );
-    for (const side of ['a', 'b'] as const) {
-      const d = this.getDoc(side);
-      for (const n of d?.notes ?? []) parts.push(`<span><b>${SIDE_NAME[side]}:</b> ${esc(n)}</span>`);
+    // Notes that apply to both documents are shown once.
+    const notesA = this.a?.notes ?? [];
+    const notesB = this.b?.notes ?? [];
+    for (const n of new Set([...notesA, ...notesB])) {
+      const who = notesA.includes(n) && notesB.includes(n) ? 'A and B' : notesA.includes(n) ? 'A' : 'B';
+      parts.push(`<span><b>${who}:</b> ${esc(n)}</span>`);
     }
     this.el.notice.hidden = !parts.length;
     this.el.notice.innerHTML = parts.map((p) => `<div class="notice-line">${p}</div>`).join('');
@@ -726,10 +743,13 @@ export class App {
     const n = this.cmp?.hunks.length ?? 0;
     if (!n) return;
     let base = this.current;
-    // If the reader scrolled away, continue from what is on screen.
-    const inView = this.grid.hunkInView();
-    if (inView >= 0 && !this.hunkVisible(base)) base = delta > 0 ? inView - 1 : inView;
+    // If the reader scrolled away by hand, continue from what is on screen.
+    if (this.userScrolled && !this.hunkVisible(base)) {
+      const inView = this.grid.hunkInView();
+      if (inView >= 0) base = delta > 0 ? inView - 1 : inView;
+    }
     const next = Math.max(0, Math.min(n - 1, base + delta));
+    this.userScrolled = false;
     this.setCurrent(next, true);
   }
 

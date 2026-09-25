@@ -165,3 +165,123 @@ if shutil.which('soffice'):
                        check=True, capture_output=True)
         shutil.copy(os.path.join(tmp, os.path.basename(src)), os.path.join(OUT, name))
         print('wrote', os.path.join(OUT, name))
+
+
+# ---------------------------------------------------------------------------
+# A document exercising harder Word features: comments, footnotes, bookmarks,
+# section breaks, a content control, tracked changes, a TOC field spanning
+# paragraphs, a nested table and a custom paragraph style.
+
+import copy
+
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.opc.packuri import PackURI
+from docx.opc.part import Part
+from docx.oxml import parse_xml
+from docx.enum.style import WD_STYLE_TYPE
+
+W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+NSDECL = f'xmlns:w="{W}"'
+
+
+def add_footnotes(doc, text):
+    xml = (
+        f'<w:footnotes {NSDECL}>'
+        '<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>'
+        '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>'
+        '<w:footnote w:id="1"><w:p><w:r><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteRef/></w:r>'
+        f'<w:r><w:t xml:space="preserve"> {text}</w:t></w:r></w:p></w:footnote>'
+        '</w:footnotes>'
+    )
+    part = Part(PackURI('/word/footnotes.xml'),
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml',
+                xml.encode('utf-8'), doc.part.package)
+    doc.part.relate_to(part, RT.FOOTNOTES)
+
+
+def footnote_ref(paragraph):
+    paragraph._p.append(parse_xml(
+        f'<w:r {NSDECL}><w:rPr><w:vertAlign w:val="superscript"/></w:rPr><w:footnoteReference w:id="1"/></w:r>'))
+
+
+def toc(doc, entries):
+    body = doc.element.body
+    paras = []
+    for i, (title, page) in enumerate(entries):
+        begin = ('<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> TOC \\o "1-3" \\h \\z \\u </w:instrText></w:r>'
+                 '<w:r><w:fldChar w:fldCharType="separate"/></w:r>') if i == 0 else ''
+        end = '<w:r><w:fldChar w:fldCharType="end"/></w:r>' if i == len(entries) - 1 else ''
+        paras.append(f'<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr>{begin}<w:r><w:t>{title}</w:t></w:r><w:r><w:tab/></w:r><w:r><w:t>{page}</w:t></w:r>{end}</w:p>')
+    sdt = parse_xml(
+        f'<w:sdt {NSDECL}><w:sdtPr><w:id w:val="-1512335"/><w:docPartObj><w:docPartGallery w:val="Table of Contents"/><w:docPartUnique/></w:docPartObj></w:sdtPr>'
+        f'<w:sdtContent><w:p><w:pPr><w:pStyle w:val="TOCHeading"/></w:pPr><w:r><w:t>Contents</w:t></w:r></w:p>{"".join(paras)}</w:sdtContent></w:sdt>')
+    body.insert(len(body) - 1, sdt)
+
+
+def content_control(doc, lines):
+    body = doc.element.body
+    from xml.sax.saxutils import escape
+    ps = ''.join(f'<w:p><w:r><w:t xml:space="preserve">{escape(l)}</w:t></w:r></w:p>' for l in lines)
+    sdt = parse_xml(f'<w:sdt {NSDECL}><w:sdtPr><w:alias w:val="Client details"/><w:tag w:val="client"/><w:id w:val="731025"/></w:sdtPr><w:sdtContent>{ps}</w:sdtContent></w:sdt>')
+    body.insert(len(body) - 1, sdt)
+
+
+def tracked(paragraph, keep, inserted, deleted):
+    paragraph._p.append(parse_xml(f'<w:r {NSDECL}><w:t xml:space="preserve">{keep}</w:t></w:r>'))
+    paragraph._p.append(parse_xml(
+        f'<w:ins {NSDECL} w:id="101" w:author="Reviewer" w:date="2026-05-01T10:00:00Z"><w:r><w:t xml:space="preserve">{inserted}</w:t></w:r></w:ins>'))
+    paragraph._p.append(parse_xml(
+        f'<w:del {NSDECL} w:id="102" w:author="Reviewer" w:date="2026-05-01T10:00:00Z"><w:r><w:delText xml:space="preserve">{deleted}</w:delText></w:r></w:del>'))
+
+
+def complex_doc(version):
+    v2 = version == 2
+    doc = Document()
+    toc(doc, [('1. Parties', '1'), ('2. Rates', '1'), ('3. Signatures' if not v2 else '3. Signing', '2')])
+    doc.add_heading('Master Consulting Agreement', level=0)
+    h = doc.add_heading('1. Parties', level=1)
+    add_bookmark(h, '_Toc100000001', 10)
+    content_control(doc, ['Harbor & Pine LLC', '12 Quay Street, Portland' if not v2 else '14 Quay Street, Portland'])
+    p = doc.add_paragraph('The consultant is ')
+    r = p.add_run('Northwind Studio')
+    r.bold = True
+    p.add_run('.')
+    doc.add_comment([r], text='Confirm the legal name', author='Sam Rivera', initials='SR')
+
+    if not v2:
+        clause = doc.styles.add_style('Clause', WD_STYLE_TYPE.PARAGRAPH)
+        clause.base_style = doc.styles['Normal']
+        clause.paragraph_format.left_indent = Inches(0.4)
+        clause.font.italic = True
+        doc.add_paragraph('Each party acts as an independent contractor.', style='Clause')
+
+    h = doc.add_heading('2. Rates', level=1)
+    add_bookmark(h, '_Toc100000002', 11)
+    p = doc.add_paragraph('Work is billed at $150 per hour' if not v2 else 'Work is billed at $165 per hour')
+    footnote_ref(p)
+    p.add_run('.')
+    add_footnotes(doc, 'Rates are reviewed each January.' if not v2 else 'Rates are reviewed each April.')
+
+    p = doc.add_paragraph()
+    tracked(p, 'Expenses are reimbursed ', 'within 30 days ' if v2 else 'monthly ', 'at cost ')
+
+    outer = doc.add_table(rows=1, cols=2)
+    outer.style = 'Table Grid'
+    outer.rows[0].cells[0].text = 'Rate card'
+    inner = outer.rows[0].cells[1].add_table(rows=2, cols=2)
+    inner.rows[0].cells[0].text = 'Senior'
+    inner.rows[0].cells[1].text = '$150' if not v2 else '$165'
+    inner.rows[1].cells[0].text = 'Junior'
+    inner.rows[1].cells[1].text = '$95'
+
+    doc.add_section(WD_SECTION.NEW_PAGE)
+    h = doc.add_heading('3. Signatures' if not v2 else '3. Signing', level=1)
+    add_bookmark(h, '_Toc100000003', 12)
+    p = doc.add_paragraph('Signed on behalf of each party by an authorized representative.')
+    if v2:
+        doc.add_paragraph('Electronic signatures are binding.')
+    return doc
+
+
+save(complex_doc(1), 'complex-v1.docx')
+save(complex_doc(2), 'complex-v2.docx')

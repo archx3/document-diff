@@ -246,3 +246,74 @@ describe('docx merging', () => {
     if (lo !== null) expect(lo).toContain('two');
   });
 });
+
+describe('harder Word features', () => {
+  const dec = new TextDecoder();
+  const part = (bytes: Uint8Array, name: string) => {
+    const f = unzipSync(bytes)[name];
+    return f ? dec.decode(f) : '';
+  };
+
+  it('reads content controls, the table of contents, tracked changes and footnotes', () => {
+    const d = load('complex-v1.docx');
+    expect(d.notes?.some((n) => n.includes('Tracked changes'))).toBe(true);
+    const toc = d.blocks.find((b) => b.type === 'opaque');
+    expect(toc?.type === 'opaque' && toc.label).toBe('Table of contents');
+    const client = d.blocks.find((b) => blockText(b) === '12 Quay Street, Portland');
+    expect(client).toBeDefined();
+    const rates = d.blocks.find((b) => blockText(b).startsWith('Work is billed')) as ParaBlock;
+    expect(rates.spans.find((s) => s.obj?.kind === 'footnote')?.obj?.note).toBe('Rates are reviewed each January.');
+    const expenses = d.blocks.find((b) => blockText(b).startsWith('Expenses')) as ParaBlock;
+    expect(blockText(expenses)).toBe('Expenses are reimbursed monthly ');
+  });
+
+  for (const dir of ['l2r', 'r2l'] as const) {
+    it(`merges everything ${dir === 'l2r' ? 'A → B' : 'B → A'} and keeps the file consistent`, () => {
+      const a = load('complex-v1.docx');
+      const b = load('complex-v2.docx');
+      const cmp = compareDocs(a, b, O);
+      expect(cmp.hunks.length).toBeGreaterThan(3);
+      const target = dir === 'l2r' ? b : a;
+      const merged = applySelection(cmp, dir, selectAll(cmp), backendFor(target)).doc;
+      const bytes = exportDocx(merged);
+      validatePackage(bytes);
+      const reread = readDocx(bytes, 'merged.docx');
+      const after = dir === 'l2r' ? compareDocs(a, reread, O) : compareDocs(reread, b, O);
+      expect(after.hunks).toHaveLength(0);
+
+      const doc = part(bytes, 'word/document.xml');
+      // Comments stay anchored to ids that exist.
+      const comments = part(bytes, 'word/comments.xml');
+      for (const m of doc.matchAll(/<w:comment(?:Reference|RangeStart|RangeEnd) w:id="(\d+)"/g)) expect(comments).toContain(`w:id="${m[1]}"`);
+      // Footnote references resolve.
+      const notes = part(bytes, 'word/footnotes.xml');
+      for (const m of doc.matchAll(/<w:footnoteReference w:id="(\d+)"/g)) expect(notes).toContain(`w:id="${m[1]}"`);
+      expect(notes).toContain(dir === 'l2r' ? 'reviewed each January' : 'reviewed each April');
+      // The content control and both sections survive.
+      expect(doc).toContain('w:val="Client details"');
+      expect(doc.match(/<w:sectPr\b/g)?.length).toBe(2);
+      if (dir === 'l2r') {
+        // The custom "Clause" style came along with its paragraph.
+        expect(part(bytes, 'word/styles.xml')).toMatch(/w:styleId="Clause"/);
+        expect(doc).toContain('independent contractor');
+      } else {
+        expect(doc).toContain('Electronic signatures are binding.');
+      }
+      const name = `complex-merged-${dir}.docx`;
+      expect(pythonDocxText(bytes, name)).toContain('Master Consulting Agreement');
+      const lo = libreOfficeText(bytes, name);
+      if (lo !== null) expect(lo).toContain('Master Consulting Agreement');
+    });
+  }
+
+  it('keeps comments on a paragraph whose text is replaced', () => {
+    const a = load('complex-v1.docx');
+    const b = load('complex-v2.docx');
+    // Make the commented paragraph differ, then copy A's version over it.
+    const cmp = compareDocs(a, b, { ...O, ignoreFormatting: false });
+    const row = cmp.rows.find((r) => r.r && blockText(r.r).startsWith('The consultant is'));
+    expect(row?.kind).toBe('eq');
+    const bytes = exportDocx(b);
+    expect(part(bytes, 'word/document.xml')).toContain('<w:commentReference w:id="0"/>');
+  });
+});

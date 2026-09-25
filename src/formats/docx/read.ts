@@ -70,10 +70,9 @@ export function readDocx(data: ArrayBuffer | Uint8Array, name: string): Doc {
   const blocks: Block[] = [];
   parseBlocks(pkg.body, ctx, blocks);
   const notes: string[] = [];
-  if (ctx.flags.tracked)
-    notes.push('This document has tracked changes. It is compared as if all of them were accepted.');
+  if (ctx.flags.tracked) notes.push('Tracked changes are compared as if they were all accepted, and kept as they are when you export.');
   if (pkg.partByRel(pkg.mainPath, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments'))
-    notes.push('Comments are not compared.');
+    notes.push('Comments are not compared, but stay in the file.');
   return { id: newId('d'), name, kind: 'docx', blocks, pkg, notes, version: 0 };
 }
 
@@ -128,7 +127,7 @@ function xOf(el: Element, ctx: ReadContext): DocxBlockX {
 
 function isOpaqueSdt(sdt: Element): boolean {
   const pr = wChild(sdt, 'sdtPr');
-  const gallery = wVal(wChild(wChild(pr, 'docPartObj'), 'docPartGallery') ?? wChild(wChild(pr, 'docPartList'), 'docPartGallery'), 'val');
+  const gallery = wAttr(wChild(wChild(pr, 'docPartObj'), 'docPartGallery') ?? wChild(wChild(pr, 'docPartList'), 'docPartGallery'), 'val');
   return !!gallery && /table of contents|bibliograph/i.test(gallery);
 }
 

@@ -2,7 +2,6 @@ import { alignRegion } from './align';
 import type { InlineDiff } from './inline';
 import { diffParagraphs, diffSpanLists } from './inline';
 import type { Block, Doc, ParaBlock, Span, TableBlock, TableRow } from './model';
-import { OBJ_CHAR, blockText } from './model';
 import { Interner, diffSequences, toRegions } from './myers';
 import type { CompareOptions } from './tokens';
 import { bagSimilarity, blockSig, propsSig, skipBlock, wordBag } from './tokens';
@@ -247,12 +246,14 @@ export function flattenBlocks(blocks: readonly Block[]): Span[] {
     } else if (b.type === 'opaque') {
       b.blocks.forEach(walk);
     } else if (b.type === 'table') {
-      sep();
-      const text = blockText(b);
-      out.push({
-        text: OBJ_CHAR,
-        fmt: {},
-        obj: { kind: 'object', key: 'table:' + text, label: 'Table', text: text.replace(/\s+/g, ' ').slice(0, 80) },
+      // Nested table: rows on separate lines, cells separated by a bar.
+      b.rows.forEach((r) => {
+        sep();
+        r.cells.forEach((c, i) => {
+          if (i) out.push({ text: ' | ', fmt: {} });
+          const inner = flattenBlocks(c.blocks).map((s) => (s.text === '\n' && !s.obj ? { ...s, text: ' ' } : s));
+          out.push(...inner);
+        });
       });
     }
   };

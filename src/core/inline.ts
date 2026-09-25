@@ -58,17 +58,17 @@ export function diffTokenized(a: Tokenized, b: Tokenized): InlineDiff {
       segs.push({ ...r, change: -1 });
       continue;
     }
-    const textA = rangeText(a, r.a0, r.a1);
-    const textB = rangeText(b, r.b0, r.b1);
-    changes.push({ a0: r.a0, a1: r.a1, b0: r.b0, b1: r.b1, fmtOnly: textA === textB });
+    const fmtOnly = rangeContent(a, r.a0, r.a1) === rangeContent(b, r.b0, r.b1);
+    changes.push({ a0: r.a0, a1: r.a1, b0: r.b0, b1: r.b1, fmtOnly });
     segs.push({ ...r, change: changes.length - 1 });
   }
   return { a, b, segs, changes };
 }
 
-function rangeText(t: Tokenized, c0: number, c1: number): string {
+/** Content of a token range without formatting (objects count by identity, e.g. footnote text). */
+function rangeContent(t: Tokenized, c0: number, c1: number): string {
   let s = '';
-  for (let k = c0; k < c1; k++) s += t.tokens[t.comp[k]!]!.text;
+  for (let k = c0; k < c1; k++) s += t.tokens[t.comp[k]!]!.key.split('\u0000')[0] + '\u0001';
   return s;
 }
 

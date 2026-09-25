@@ -84,8 +84,14 @@ export function fmtSig(f: Fmt): string {
   return s;
 }
 
+const PLAIN_ASCII = /^[\x20-\x7e]*$/;
+
 export function normalizeText(text: string, o: CompareOptions): string {
-  let t = text.normalize('NFC').replace(INVISIBLE_RE, '').replace(/[\u00a0\u2007\u202f\u2000-\u200a]/g, ' ');
+  let t = text;
+  // Most tokens are plain ASCII words; skip Unicode work for them.
+  if (!PLAIN_ASCII.test(t)) {
+    t = t.normalize('NFC').replace(INVISIBLE_RE, '').replace(/[\u00a0\u2007\u202f\u2000-\u200a]/g, ' ');
+  }
   if (o.normalizePunctuation) {
     t = t
       .replace(/[‘’‚‛′]/g, "'")
