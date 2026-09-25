@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { compareDocs, inlineDiff } from '../../src/core/compare';
+import { compareDocs, inlineDiff, propsChanged } from '../../src/core/compare';
 import type { Comparison } from '../../src/core/compare';
 import { applySelection, selectAll, selectInline, selectRows, selectTableRow } from '../../src/core/merge';
 import type { Doc, ParaBlock } from '../../src/core/model';
@@ -316,4 +316,42 @@ describe('harder Word features', () => {
     const bytes = exportDocx(b);
     expect(part(bytes, 'word/document.xml')).toContain('<w:commentReference w:id="0"/>');
   });
+});
+
+describe('word-level copies inside Word paragraphs', () => {
+  const pairs: Array<[string, string]> = [
+    ['contract-v1.docx', 'contract-v2.docx'],
+    ['contract-v1-lo.docx', 'contract-v2.docx'],
+    ['complex-v1.docx', 'complex-v2.docx'],
+  ];
+  for (const [la, lb] of pairs) {
+    it(`applies every word-level change on its own and all together (${la} / ${lb})`, () => {
+      const a = load(la);
+      const b = load(lb);
+      const cmp = compareDocs(a, b, O);
+      let checked = 0;
+      for (const row of cmp.rows) {
+        if (row.kind !== 'mod' || row.l?.type !== 'p' || row.r?.type !== 'p') continue;
+        const d = inlineDiff(row.l, row.r, O);
+        for (const dir of ['l2r', 'r2l'] as const) {
+          // Each change on its own keeps the rest of the paragraph.
+          d.changes.forEach((_, i) => {
+            const res = applySelection(cmp, dir, selectInline(row.key, i), docxBackend);
+            expect(res.applied).toBe(1);
+            const after = dir === 'l2r' ? compareDocs(a, res.doc, O) : compareDocs(res.doc, b, O);
+            const para = after.rows.find((r) => (dir === 'l2r' ? r.l === row.l : r.r === row.r));
+            if (d.changes.length === 1 && !propsChanged(row.l!, row.r!, O)) expect(para?.kind).toBe('eq');
+            checked++;
+          });
+          // All of them together make the text identical.
+          const all = applySelection(cmp, dir, { inline: new Map([[row.key, new Set(d.changes.map((_, i) => i))]]) }, docxBackend);
+          const src = dir === 'l2r' ? row.l : row.r;
+          const out = all.doc.blocks.find((x) => x.type === 'p' && blockText(x) === blockText(src));
+          expect(out, `${dir}: ${blockText(src)}`).toBeDefined();
+          validatePackage(exportDocx(all.doc));
+        }
+      }
+      expect(checked).toBeGreaterThan(0);
+    });
+  }
 });
