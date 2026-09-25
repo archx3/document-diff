@@ -15,7 +15,6 @@
     "test:e2e": "playwright test",
     "fixtures": "python3 scripts/make_fixtures.py"
   },
-  "license": "MIT",
   "dependencies": {
     "fflate": "^0.8.3"
   },

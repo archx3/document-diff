@@ -562,6 +562,8 @@ export class App {
     this.renderNotice();
     if (!ready) {
       this.cmp = null;
+      this.el.colheads.innerHTML = '';
+      this.el.gridEl.innerHTML = '';
       this.renderEmpty();
       this.renderToolbar();
       return;
@@ -1058,7 +1060,7 @@ export class App {
           name = `${base}.txt`;
       }
       const out = await saveFile(name, blob);
-      if (out === 'saved') this.toast(`Saved “${name}”`);
+      if (out === 'saved') this.toast(`Downloaded “${name}”`);
       else if (out === 'failed') this.toast('The file could not be saved from this page.', { error: true });
     } catch (err) {
       console.error(err);

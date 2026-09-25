@@ -219,7 +219,7 @@ export class GridView {
     for (const el of Array.from(this.el.querySelectorAll(`.row[data-hunk="${hunk}"]`))) el.classList.add('cur');
   }
 
-  scrollToHunk(hunk: number, smooth: boolean): void {
+  scrollToHunk(hunk: number, smooth: boolean, retry = true): void {
     const first = this.el.querySelector<HTMLElement>(`.row[data-hunk="${hunk}"]`);
     if (!first) return;
     const all = this.el.querySelectorAll<HTMLElement>(`.row[data-hunk="${hunk}"]`);
@@ -229,8 +229,21 @@ export class GridView {
     const bottom = last.getBoundingClientRect().bottom - sr.top + this.scroller.scrollTop;
     const head = (this.scroller.querySelector('.colheads') as HTMLElement | null)?.offsetHeight ?? 0;
     const avail = this.scroller.clientHeight - head;
-    const target = bottom - top < avail * 0.8 ? top - head - (avail - (bottom - top)) / 3 : top - head - 12;
-    this.scroller.scrollTo({ top: Math.max(0, target), behavior: smooth ? 'smooth' : 'auto' });
+    const target = Math.max(0, bottom - top < avail * 0.8 ? top - head - (avail - (bottom - top)) / 3 : top - head - 12);
+    if (Math.abs(target - this.scroller.scrollTop) < 2) return;
+    if (retry) {
+      // Rows far away have estimated heights until they render; correct once the scroll settles.
+      const started = Date.now();
+      const settle = () => {
+        if (Date.now() - started > 2000) return;
+        const r = first.getBoundingClientRect();
+        const s = this.scroller.getBoundingClientRect();
+        if (r.top < s.top + head || r.top > s.bottom - 60) this.scrollToHunk(hunk, false, false);
+      };
+      if ('onscrollend' in this.scroller) this.scroller.addEventListener('scrollend', settle, { once: true });
+      else setTimeout(settle, smooth ? 500 : 60);
+    }
+    this.scroller.scrollTo({ top: target, behavior: smooth ? 'smooth' : 'auto' });
   }
 
   /** First hunk whose rows are at or below the top of the viewport. */
