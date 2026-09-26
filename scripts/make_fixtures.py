@@ -7,6 +7,7 @@ import base64
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 
 from docx import Document
@@ -23,7 +24,7 @@ os.makedirs(OUT, exist_ok=True)
 RED_PNG = base64.b64decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg==')
 BLUE_PNG = base64.b64decode(
-    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGNkYPjPwMDAxMDAwMDAAAAOAgECqz+vFwAAAABJRU5ErkJggg==')
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAD0lEQVR4nGNgYPgPRmAKABf2A/1+6zfzAAAAAElFTkSuQmCC')
 
 
 def add_hyperlink(paragraph, url, text, bold=False):
@@ -285,3 +286,7 @@ def complex_doc(version):
 
 save(complex_doc(1), 'complex-v1.docx')
 save(complex_doc(2), 'complex-v2.docx')
+
+# Other formats (OpenDocument, RTF, Word 97, EPUB) converted by LibreOffice.
+if shutil.which('soffice'):
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), 'convert_fixtures.py')], check=True)

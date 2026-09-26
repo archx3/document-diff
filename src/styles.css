@@ -1053,6 +1053,38 @@ ins.chg .obj-img {
   color: var(--ink-3);
 }
 
+/* A CSV file: one table row per aligned row, joined into one table. */
+.row.frag .cell {
+  padding-block: 0;
+}
+
+.row.frag .ph {
+  margin-block: 0;
+  min-height: 30px;
+}
+
+.grid > .row.frag:first-child .trow,
+.row:not(.frag) + .row.frag .trow {
+  border-top: 1px solid var(--ink-3);
+}
+
+/* Code, data and log files. */
+.grid.mono-a .cell.a,
+.grid.mono-b .cell.b {
+  font: 13px/1.55 var(--font-mono);
+  tab-size: 4;
+}
+
+.grid.mono-a .cell.a .blk,
+.grid.mono-b .cell.b .blk {
+  padding: 1px 0;
+}
+
+.grid.mono-a .cell.a .tcell,
+.grid.mono-b .cell.b .tcell {
+  font-size: 12.5px;
+}
+
 /* -------------------------------------------------------------- ruler */
 
 .ruler {

@@ -125,6 +125,8 @@ export interface TableRow {
 export interface TableBlock extends BlockBase {
   type: 'table';
   rows: TableRow[];
+  /** One row of a larger table (CSV files are read one row per block). */
+  fragment?: boolean;
 }
 
 /** Content compared and copied as a unit (table of contents, embedded content). */
@@ -141,19 +143,29 @@ export interface MarkerBlock extends BlockBase {
 
 export type Block = ParaBlock | TableBlock | OpaqueBlock | MarkerBlock;
 
-export type DocKind = 'docx' | 'html' | 'text' | 'markdown' | 'sample';
+export type DocKind = 'docx' | 'odt' | 'rtf' | 'doc' | 'epub' | 'html' | 'text' | 'markdown' | 'csv' | 'sample';
 
 export interface Doc {
   id: string;
   name: string;
   kind: DocKind;
   blocks: Block[];
-  /** Format backend package (the DOCX zip for .docx files). */
+  /** Format backend package (the DOCX or ODT zip, for files that are written back in place). */
   pkg?: unknown;
   /** Things the reader should know about this file (tracked changes, unsupported parts …). */
   notes?: string[];
   /** Bumped on every edit. */
   version: number;
+  /** Original file extension (lower case, no dot), for saving text files in their own format. */
+  ext?: string;
+  /** Short name of the file format, shown on the document's badge. */
+  formatLabel?: string;
+  /** Show the text in a monospace font (source code, data and log files). */
+  mono?: boolean;
+  /** Line ending of the original text file. */
+  eol?: '\n' | '\r\n';
+  /** Field separator of a CSV-like file. */
+  delimiter?: string;
 }
 
 let idCounter = 0;
@@ -175,11 +187,23 @@ export function hashBytes(bytes: Uint8Array): string {
   return (h >>> 0).toString(16) + ':' + bytes.length.toString(16);
 }
 
+/** Fields whose result depends on layout or on when the file was opened; compared by field code only. */
+const VOLATILE_FIELDS = new Set(['PAGE', 'NUMPAGES', 'SECTIONPAGES', 'SECTION', 'DATE', 'TIME', 'PRINTDATE', 'SAVEDATE', 'EDITTIME', 'NUMWORDS', 'NUMCHARS', 'FILESIZE']);
+
+/** Comparison key of a field: its code and, unless the result is volatile, its result text. */
+export function fieldKey(code: string, text: string): string {
+  return VOLATILE_FIELDS.has(code) ? code : `${code}|${text}`;
+}
+
 export function isBlank(block: Block): boolean {
   if (block.type !== 'p') return false;
   for (const s of block.spans) {
     if (s.marker) continue;
-    if (s.obj) return false;
+    // Page breaks are layout: a paragraph holding only one counts as empty.
+    if (s.obj) {
+      if (s.obj.kind === 'pagebreak') continue;
+      return false;
+    }
     if (/[^\s\u00a0\u200b\u200c\u200d\ufeff\u00ad]/.test(s.text)) return false;
   }
   return true;
@@ -293,4 +317,19 @@ export function describeProps(p: ParaProps): string {
   }
   if (p.align) base += `, ${p.align === 'justify' ? 'justified' : p.align === 'center' ? 'centered' : 'right-aligned'}`;
   return base;
+}
+
+/** Paragraph role for a style name used by Word, LibreOffice, Google Docs or RTF ("heading 2", "Title" …). */
+export function roleFromName(name: string): { role: Role; level?: number } | undefined {
+  const n = name.trim().toLowerCase();
+  let m = /^heading\s*(\d)$/.exec(n);
+  if (m) return { role: 'h', level: Math.min(9, parseInt(m[1]!, 10)) };
+  m = /^(?:toc|contents)\s*(\d)$/.exec(n);
+  if (m) return { role: 'toc', level: parseInt(m[1]!, 10) };
+  if (n === 'title') return { role: 'title' };
+  if (n === 'subtitle') return { role: 'subtitle' };
+  if (n === 'quote' || n === 'quotations' || n === 'intense quote' || n === 'block text') return { role: 'quote' };
+  if (n === 'caption') return { role: 'caption' };
+  if (['html preformatted', 'plain text', 'code', 'source code', 'preformatted text'].includes(n)) return { role: 'code' };
+  return undefined;
 }

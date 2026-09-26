@@ -65,6 +65,8 @@ export class GridView {
     }
     this.labelsL = computeListLabels(cmp.left.blocks);
     this.labelsR = computeListLabels(cmp.right.blocks);
+    this.el.classList.toggle('mono-a', !!cmp.left.mono);
+    this.el.classList.toggle('mono-b', !!cmp.right.mono);
     const anchor = this.captureAnchor();
 
     const rows = cmp.rows;
@@ -142,9 +144,10 @@ export class GridView {
     const o = this.cmp!.opts;
     const L = this.labelsL;
     const R = this.labelsR;
+    const frag = (row.l ?? row.r)?.type === 'table' && ((row.l ?? row.r) as TableBlock).fragment ? ' frag' : '';
     switch (row.kind) {
       case 'eq':
-        return shell(row.key, row.key, 'eq', blockHtml(row.l!, L), '', blockHtml(row.r!, R));
+        return shell(row.key, row.key, 'eq', blockHtml(row.l!, L), '', blockHtml(row.r!, R), frag);
       case 'mod': {
         const l = row.l!;
         const r = row.r!;
@@ -156,12 +159,34 @@ export class GridView {
         return shell(row.key, row.key, 'mod', modCellHtml(flattenBlocks([l]), d, 'a'), gutter(row.key, 'mod'), modCellHtml(flattenBlocks([r]), d, 'b'));
       }
       case 'del':
-        return shell(row.key, row.key, 'del', blockHtml(row.l!, L), gutter(row.key, 'del'), placeholder('B'));
+        return shell(row.key, row.key, 'del', blockHtml(row.l!, L), gutter(row.key, 'del'), placeholder('B'), frag);
       case 'ins':
-        return shell(row.key, row.key, 'ins', placeholder('A'), gutter(row.key, 'ins'), blockHtml(row.r!, R));
+        return shell(row.key, row.key, 'ins', placeholder('A'), gutter(row.key, 'ins'), blockHtml(row.r!, R), frag);
       case 'table':
-        return this.tableHtml(row);
+        return frag ? this.fragmentHtml(row) : this.tableHtml(row);
     }
+  }
+
+  /** A changed row of a CSV-like table: one aligned row with cell-level changes. */
+  private fragmentHtml(row: Row): string {
+    const lt = row.l as TableBlock;
+    const rt = row.r as TableBlock;
+    const o = this.cmp!.opts;
+    const lr = lt.rows[0]!;
+    const rr = rt.rows[0]!;
+    let a: string;
+    let b: string;
+    if (lt.rows.length === 1 && rt.rows.length === 1 && lr.cells.length === rr.cells.length) {
+      const diffs = lr.cells.map((c, i) => cellDiff(c.blocks, rr.cells[i]!.blocks, o));
+      const cell = (side: 'a' | 'b') => (c: TableCell, i: number) =>
+        diffs[i]!.changes.length ? modCellHtml(flattenBlocks(c.blocks), diffs[i]!, side) : c.blocks.map((x) => blockHtml(x, side === 'a' ? this.labelsL : this.labelsR)).join('');
+      a = tableRowHtml(lr, columnsOf(lt.rows), this.labelsL, cell('a'));
+      b = tableRowHtml(rr, columnsOf(rt.rows), this.labelsR, cell('b'));
+    } else {
+      a = lt.rows.map((r) => tableRowHtml(r, columnsOf(lt.rows), this.labelsL, undefined, ' whole')).join('');
+      b = rt.rows.map((r) => tableRowHtml(r, columnsOf(rt.rows), this.labelsR, undefined, ' whole')).join('');
+    }
+    return shell(row.key, row.key, 'mod', a, gutter(row.key, 'mod'), b, ' frag');
   }
 
   private tableHtml(row: Row): string {

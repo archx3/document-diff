@@ -237,7 +237,8 @@ function rPrFor(doc: Document, fmt: Fmt, pkg: DocxPackage, linkStyle: boolean): 
   return rPr.firstChild ? rPr : null;
 }
 
-function imageSize(data: Uint8Array): { w: number; h: number } | undefined {
+/** Pixel size of a PNG, GIF or JPEG image. */
+export function imageSize(data: Uint8Array): { w: number; h: number } | undefined {
   const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
   if (data.length > 24 && data[0] === 0x89 && data[1] === 0x50) return { w: dv.getUint32(16), h: dv.getUint32(20) };
   if (data.length > 10 && data[0] === 0x47 && data[1] === 0x49) return { w: dv.getUint16(6, true), h: dv.getUint16(8, true) };
@@ -468,7 +469,15 @@ export function generateBlock(block: Block, ctx: GenerateContext): Element | nul
       const doc = ctx.pkg.main;
       const sdt = createW(doc, 'sdt');
       const sdtPr = createW(doc, 'sdtPr');
-      sdtPr.appendChild(createW(doc, 'alias', { val: block.label }));
+      const gallery = block.label === 'Table of contents' ? 'Table of Contents' : block.label === 'Bibliography' ? 'Bibliographies' : undefined;
+      if (gallery) {
+        // Word recognizes these as a table of contents / bibliography.
+        const obj = createW(doc, 'docPartObj');
+        obj.append(createW(doc, 'docPartGallery', { val: gallery }), createW(doc, 'docPartUnique'));
+        sdtPr.appendChild(obj);
+      } else {
+        sdtPr.appendChild(createW(doc, 'alias', { val: block.label }));
+      }
       const content = createW(doc, 'sdtContent');
       for (const b of block.blocks) {
         const el = generateBlock(b, ctx);

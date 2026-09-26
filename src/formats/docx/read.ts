@@ -1,5 +1,5 @@
 import type { Block, Doc, Fmt, InlineObject, ParaBlock, Span, TableBlock, TableCell, TableRow } from '../../core/model';
-import { OBJ_CHAR, newId } from '../../core/model';
+import { OBJ_CHAR, fieldKey, newId } from '../../core/model';
 import { DocxPackage, resolveTarget } from './package';
 import { runFmt } from './styles';
 import { NS, descendants, elements, isEl, isW, plainText, wAttr, wChild, wVal } from './xml';
@@ -268,7 +268,7 @@ function fieldFmt(instr: string, base: Fmt): Fmt {
 
 function fieldObj(instr: string, text: string): InlineObject {
   const code = instr.trim().split(/\s+/)[0]?.toUpperCase() ?? '';
-  return { kind: 'field', key: `${code}|${text}`, label: code ? `Field: ${code}` : 'Field', text };
+  return { kind: 'field', key: fieldKey(code, text), label: code ? `Field: ${code}` : 'Field', text };
 }
 
 const TEXT_CHILD: Record<string, string> = {

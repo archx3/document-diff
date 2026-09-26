@@ -73,16 +73,21 @@ const PUA_BULLETS = new Map<string, string>([
   ['\u00a7', '\u25aa'],
 ]);
 
-function bulletGlyph(list: ListInfo): string {
-  const t = list.template;
+/** Visible bullet for a list level whose label template is `template` (Symbol-font glyphs become Unicode). */
+export function bulletChar(template: string | undefined, level: number): string {
+  const t = template;
   if (t !== undefined && t !== '' && !/%\d/.test(t)) {
     const mapped = PUA_BULLETS.get(t);
     if (mapped) return mapped;
     const cp = t.codePointAt(0)!;
-    if (cp >= 0xe000 && cp <= 0xf8ff) return BULLETS[list.level % 3]!;
+    if (cp >= 0xe000 && cp <= 0xf8ff) return BULLETS[level % 3]!;
     return t;
   }
-  return BULLETS[list.level % 3]!;
+  return BULLETS[level % 3]!;
+}
+
+function bulletGlyph(list: ListInfo): string {
+  return bulletChar(list.template, list.level);
 }
 
 /**

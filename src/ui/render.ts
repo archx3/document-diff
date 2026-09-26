@@ -118,7 +118,8 @@ export function blockHtml(b: Block, labels: Labels): string {
     case 'p':
       return paraWrap(b, spansHtml(b.spans), labels);
     case 'table':
-      return tableHtml(b.rows, labels);
+      // A row of a larger table (CSV) renders bare so consecutive rows join up.
+      return b.fragment ? tableRowHtml(b.rows[0]!, columnsOf(b.rows), labels) : tableHtml(b.rows, labels);
     case 'opaque':
       return `<div class="opaque"><div class="opaque-label">${esc(b.label)}</div>${b.blocks.map((x) => blockHtml(x, labels)).join('')}</div>`;
     case 'marker':

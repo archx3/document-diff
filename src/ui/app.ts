@@ -35,15 +35,26 @@ const SIDE_NAME: Record<Side, string> = { a: 'A', b: 'B' };
 const other = (s: Side): Side => (s === 'a' ? 'b' : 'a');
 
 function kindLabel(doc: Doc): string {
+  if (doc.formatLabel) return doc.formatLabel;
   switch (doc.kind) {
     case 'docx':
       return 'Word';
+    case 'odt':
+      return 'OpenDocument';
+    case 'rtf':
+      return 'RTF';
+    case 'doc':
+      return 'Word 97';
+    case 'epub':
+      return 'EPUB';
     case 'html':
       return /^Pasted/.test(doc.name) ? 'Pasted' : 'HTML';
     case 'markdown':
       return 'Markdown';
     case 'text':
       return /^Pasted/.test(doc.name) ? 'Pasted' : 'Text';
+    case 'csv':
+      return 'CSV';
     case 'sample':
       return 'Sample';
   }

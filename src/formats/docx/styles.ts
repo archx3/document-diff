@@ -1,4 +1,7 @@
 import type { Fmt, Role } from '../../core/model';
+import { roleFromName } from '../../core/model';
+
+export { roleFromName };
 import { NS, elements, onOff, wAttr, wChild, wVal } from './xml';
 
 export interface StyleDef {
@@ -119,20 +122,6 @@ export class StyleIndex {
     this.charCache.set(id, fmt);
     return fmt;
   }
-}
-
-export function roleFromName(name: string): { role: Role; level?: number } | undefined {
-  const n = name.trim().toLowerCase();
-  let m = /^heading\s*(\d)$/.exec(n);
-  if (m) return { role: 'h', level: Math.min(9, parseInt(m[1]!, 10)) };
-  m = /^toc\s*(\d)$/.exec(n);
-  if (m) return { role: 'toc', level: parseInt(m[1]!, 10) };
-  if (n === 'title') return { role: 'title' };
-  if (n === 'subtitle') return { role: 'subtitle' };
-  if (n === 'quote' || n === 'intense quote' || n === 'block text') return { role: 'quote' };
-  if (n === 'caption') return { role: 'caption' };
-  if (n === 'html preformatted' || n === 'plain text' || n === 'code' || n === 'source code') return { role: 'code' };
-  return undefined;
 }
 
 const MONO = /courier|consolas|mono|menlo|lucida console|source code/i;

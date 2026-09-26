@@ -1,17 +1,10 @@
 import type { Block, Doc, Fmt, ParaProps, Span, TableCell, TableRow } from '../../core/model';
 import { OBJ_CHAR, newId, normalizeSpans } from '../../core/model';
+import { readPlainText } from './plain';
 
 /** Plain text: one paragraph per line. */
 export function readText(text: string, name: string): Doc {
-  const lines = text.replace(/^\ufeff/, '').replace(/\r\n?/g, '\n').split('\n');
-  if (lines.length && lines[lines.length - 1] === '') lines.pop();
-  const blocks: Block[] = lines.map((line) => ({
-    id: newId('p'),
-    type: 'p',
-    props: { role: 'p' },
-    spans: line ? [{ text: line, fmt: {} }] : [],
-  }));
-  return { id: newId('d'), name, kind: 'text', blocks, version: 0 };
+  return readPlainText(text, name, 'txt');
 }
 
 /* ----------------------------------------------------------- markdown */

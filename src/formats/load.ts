@@ -76,7 +76,7 @@ export function loadPaste(html: string, text: string, name?: string): PasteResul
     const doc = readHtml(html, label);
     if (doc.blocks.length) return { doc, source };
   }
-  return { doc: readText(text, name ?? 'Pasted text'), source: 'text' };
+  return { doc: { ...readText(text, name ?? 'Pasted text'), formatLabel: 'Pasted' }, source: 'text' };
 }
 
 /** Extracts a Google Docs document id from a link, or undefined. */
