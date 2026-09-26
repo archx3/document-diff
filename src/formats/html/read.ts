@@ -68,11 +68,17 @@ interface ListCtx {
   start?: number;
 }
 
+/** Pictures referenced by relative paths (inside an EPUB, for instance). */
+export interface HtmlOptions {
+  image?: (src: string) => { data: Uint8Array; mime: string; url?: string } | undefined;
+}
+
 interface Ctx {
   fmt: Fmt;
   role: Role | null;
   preserve: boolean;
   lists: ListCtx[];
+  opts?: HtmlOptions;
 }
 
 function elementFmt(el: Element, base: Fmt, style: Map<string, string>): Fmt {
@@ -190,7 +196,7 @@ function hashString(s: string): string {
   return (h >>> 0).toString(16);
 }
 
-function imageObject(el: Element, style: Map<string, string>): InlineObject {
+function imageObject(el: Element, style: Map<string, string>, opts?: HtmlOptions): InlineObject {
   const src = el.getAttribute('src') ?? '';
   const alt = el.getAttribute('alt') ?? el.getAttribute('title') ?? '';
   const px = (v: string | null | undefined) => {
@@ -201,12 +207,13 @@ function imageObject(el: Element, style: Map<string, string>): InlineObject {
   };
   const width = px(el.getAttribute('width')) ?? px(style.get('width'));
   const height = px(el.getAttribute('height')) ?? px(style.get('height'));
-  const decoded = src.startsWith('data:') ? decodeDataUrl(src) : undefined;
+  const resolved = !src.startsWith('data:') && opts?.image ? opts.image(src) : undefined;
+  const decoded = src.startsWith('data:') ? decodeDataUrl(src) : resolved;
   return {
     kind: 'image',
     key: 'img:' + (decoded ? hashBytes(decoded.data) : hashString(src)),
     label: alt || 'Image',
-    src: src || undefined,
+    src: resolved ? resolved.url : src || undefined,
     width,
     height,
     data: decoded?.data,
@@ -328,7 +335,7 @@ function walk(node: Node, ctx: Ctx, b: Builder): void {
       b.add({ text: '\n', fmt: ctx.fmt }, ctx);
       return;
     case 'img':
-      b.add({ text: OBJ_CHAR, fmt: ctx.fmt, obj: imageObject(el, style) }, ctx);
+      b.add({ text: OBJ_CHAR, fmt: ctx.fmt, obj: imageObject(el, style, ctx.opts) }, ctx);
       return;
     case 'hr':
       b.close();
@@ -478,13 +485,17 @@ function expandRowspans(rows: TableRow[]): void {
   }
 }
 
+/** Blocks for the content of an HTML (or XHTML) element. */
+export function htmlBlocks(root: Element, opts?: HtmlOptions): Block[] {
+  const b = new Builder();
+  walkChildren(root, { fmt: {}, role: null, preserve: false, lists: [], opts }, b);
+  b.close();
+  return b.out;
+}
+
 export function readHtml(html: string, name: string, kind: DocKind = 'html'): Doc {
   const dom = new DOMParser().parseFromString(html, 'text/html');
-  const b = new Builder();
-  walkChildren(dom.body, { fmt: {}, role: null, preserve: false, lists: [] }, b);
-  b.close();
-  const blocks = b.out;
-  return { id: newId('d'), name, kind, blocks, version: 0 };
+  return { id: newId('d'), name, kind, blocks: htmlBlocks(dom.body), version: 0 };
 }
 
 /** Where pasted rich text most likely came from, for the load message. */

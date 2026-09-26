@@ -25,6 +25,13 @@ CONVERSIONS = [
     ('complex-v1.docx', 'doc:MS Word 97'),
     ('contract-v1.docx', 'epub'),
     ('contract-v2.docx', 'epub'),
+    # Tagged PDFs carry headings, lists and tables; untagged ones only positioned text.
+    ('contract-v1.docx', 'pdf:writer_pdf_Export:{"UseTaggedPDF":{"type":"boolean","value":"true"}}'),
+    ('contract-v2.docx', 'pdf:writer_pdf_Export:{"UseTaggedPDF":{"type":"boolean","value":"true"}}'),
+    ('complex-v1.docx', 'pdf:writer_pdf_Export:{"UseTaggedPDF":{"type":"boolean","value":"true"}}'),
+    ('contract-v1.docx', 'pdf:writer_pdf_Export:{"UseTaggedPDF":{"type":"boolean","value":"false"}}', 'contract-v1-untagged.pdf'),
+    ('contract-v2.docx', 'pdf:writer_pdf_Export:{"UseTaggedPDF":{"type":"boolean","value":"false"}}', 'contract-v2-untagged.pdf'),
+    ('complex-v1.docx', 'pdf:writer_pdf_Export:{"UseTaggedPDF":{"type":"boolean","value":"false"}}', 'complex-v1-untagged.pdf'),
 ]
 
 
@@ -33,12 +40,13 @@ def main():
         print('soffice not found; skipping conversions')
         return 1
     tmp = tempfile.mkdtemp()
-    for src, fmt in CONVERSIONS:
+    for src, fmt, *rest in CONVERSIONS:
         ext = fmt.split(':')[0]
         subprocess.run(['soffice', '--headless', '--convert-to', fmt, '--outdir', tmp, os.path.join(FIXTURES, src)],
                        check=True, capture_output=True)
-        name = src.replace('.docx', '.' + ext)
-        shutil.copy(os.path.join(tmp, name), os.path.join(FIXTURES, name))
+        produced = src.replace('.docx', '.' + ext)
+        name = rest[0] if rest else produced
+        shutil.copy(os.path.join(tmp, produced), os.path.join(FIXTURES, name))
         print('wrote', os.path.join(FIXTURES, name))
     return 0
 

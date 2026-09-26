@@ -146,7 +146,9 @@ export function tokenizeSpans(spans: readonly Span[], o: CompareOptions): Tokeni
     }
     if (s.obj) {
       const obj = s.obj;
-      const sig = o.ignoreFormatting ? '' : fmtSig(s.fmt);
+      // Whether a note reference is raised is presentation, not content.
+      const note = obj.kind === 'footnote' || obj.kind === 'endnote';
+      const sig = o.ignoreFormatting ? '' : fmtSig(note ? { ...s.fmt, sup: false, sub: false } : s.fmt);
       tokens.push({
         key: `${OBJ_CHAR}${obj.kind}:${normalizeText(obj.key, o)}\u0000${sig}`,
         text: s.text,

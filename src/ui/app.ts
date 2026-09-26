@@ -47,6 +47,8 @@ function kindLabel(doc: Doc): string {
       return 'Word 97';
     case 'epub':
       return 'EPUB';
+    case 'pdf':
+      return 'PDF';
     case 'html':
       return /^Pasted/.test(doc.name) ? 'Pasted' : 'HTML';
     case 'markdown':

@@ -143,7 +143,7 @@ export interface MarkerBlock extends BlockBase {
 
 export type Block = ParaBlock | TableBlock | OpaqueBlock | MarkerBlock;
 
-export type DocKind = 'docx' | 'odt' | 'rtf' | 'doc' | 'epub' | 'html' | 'text' | 'markdown' | 'csv' | 'sample';
+export type DocKind = 'docx' | 'odt' | 'rtf' | 'doc' | 'epub' | 'pdf' | 'html' | 'text' | 'markdown' | 'csv' | 'sample';
 
 export interface Doc {
   id: string;

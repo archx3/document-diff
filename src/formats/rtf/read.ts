@@ -459,10 +459,10 @@ class RtfReader {
     const props: ParaProps = { role: 'p' };
     const name = this.styles.get(p.style);
     const r = name ? roleFromName(name) : undefined;
+    if (name) props.styleName = name;
     if (r) {
       props.role = r.role;
       if (r.level) props.level = r.level;
-      props.styleName = name;
     } else if (p.outline !== null && p.outline >= 0 && p.outline < 9) {
       props.role = 'h';
       props.level = p.outline + 1;
@@ -1063,6 +1063,9 @@ class RtfReader {
       }
       if (f?.passthrough && f.startBlock !== undefined && !this.tables.length) {
         if (this.spans.length) this.endParagraph(true);
+        // The index's own title ("Contents") belongs to it.
+        const prev = this.blocks[f.startBlock - 1];
+        if (prev?.type === 'p' && /\b(toc|contents|index) heading$/i.test(prev.props.styleName ?? '')) f.startBlock--;
         const inner = this.blocks.splice(f.startBlock);
         this.blocks.push({ id: newId('o'), type: 'opaque', label: INDEX_FIELDS[f.code ?? '']!, blocks: inner });
       }
