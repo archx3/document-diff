@@ -1,7 +1,7 @@
 import type { Comparison, Row, TableRowDiff } from '../core/compare';
 import { cellDiff, flattenBlocks, inlineDiff, propsChanged } from '../core/compare';
 import { computeListLabels } from '../core/lists';
-import type { ParaBlock, TableBlock, TableCell } from '../core/model';
+import type { Block, Doc, ParaBlock, TableBlock, TableCell, TableRow } from '../core/model';
 import { optionsKey } from '../core/tokens';
 import { icons } from './icons';
 import type { Labels } from './render';
@@ -17,6 +17,41 @@ export interface GridState {
   expanded: Set<string>;
 }
 
+/** One element of the grid as laid out: where it is in the scrolled content and what it shows. */
+export interface RowBox {
+  /** Offset from the top of the scrolled content, and height, in px. */
+  top: number;
+  height: number;
+  /** eq, mod, del, ins; tcap, teq, tmod, tdel, tins for the parts of a table; fold. */
+  kind: string;
+  /** The change it belongs to, -1 for unchanged text. */
+  hunk: number;
+  /** Characters of text on each side; 0 when that side has nothing here. */
+  a: number;
+  b: number;
+}
+
+export interface HunkBox {
+  hunk: number;
+  top: number;
+  bottom: number;
+  kind: 'mod' | 'del' | 'ins';
+}
+
+export interface Layout {
+  /** Changes whenever anything here may have moved. */
+  key: string;
+  /** Height of the scrolled content, and of the column heads that stay at its top. */
+  total: number;
+  head: number;
+  rows: RowBox[];
+  /** Every change, in order. */
+  hunks: HunkBox[];
+  /** Line height (px) and characters per line of each side's text, for drawing it in miniature. */
+  line: Record<'a' | 'b', number>;
+  chars: Record<'a' | 'b', number>;
+}
+
 type Kind = 'mod' | 'del' | 'ins';
 
 function gutter(key: string, kind: Kind, sub?: string, scope?: string): string {
@@ -29,9 +64,45 @@ function gutter(key: string, kind: Kind, sub?: string, scope?: string): string {
   const what = scope === 'table' ? ' (whole table)' : sub ? ' (this row)' : '';
   const data = `data-key="${esc(key)}"${sub ? ` data-sub="${esc(sub)}"` : ''}`;
   return (
-    `<button type="button" class="act to-a" data-act="r2l" ${data} title="${toA}${what}" aria-label="${toA}${what}">${icons.toA}</button>` +
-    `<button type="button" class="act to-b" data-act="l2r" ${data} title="${toB}${what}" aria-label="${toB}${what}">${icons.toB}</button>`
+    `<button type="button" class="act to-a" data-act="r2l" ${data} data-tip="${toA}${what}" aria-label="${toA}${what}">${icons.toA}</button>` +
+    `<button type="button" class="act to-b" data-act="l2r" ${data} data-tip="${toB}${what}" aria-label="${toB}${what}">${icons.toB}</button>`
   );
+}
+
+/** Rough length of a block's text (a picture counts as a short word). */
+function textLength(b: Block): number {
+  switch (b.type) {
+    case 'p': {
+      let n = 0;
+      for (const s of b.spans) if (!s.marker) n += s.obj ? 6 : s.text.length;
+      // An empty paragraph still takes a line.
+      return Math.max(1, n);
+    }
+    case 'table':
+      return b.rows.reduce((n, r) => n + rowLength(r), 0);
+    case 'opaque':
+      return Math.max(1, b.blocks.reduce((n, x) => n + textLength(x), 0));
+    case 'marker':
+      return 0;
+  }
+}
+
+function rowLength(r: TableRow): number {
+  return Math.max(1, r.cells.reduce((n, c) => n + c.blocks.reduce((m, x) => m + textLength(x), 0), 0));
+}
+
+const numberings = new WeakMap<Doc, Map<Block, number>>();
+
+/** Paragraph numbers of a document, counting every paragraph and table (for text files, its lines). */
+function numbering(doc: Doc): Map<Block, number> {
+  let m = numberings.get(doc);
+  if (!m) {
+    m = new Map();
+    let n = 0;
+    for (const b of doc.blocks) if (b.type !== 'marker') m.set(b, ++n);
+    numberings.set(doc, m);
+  }
+  return m;
 }
 
 function placeholder(side: 'A' | 'B'): string {
@@ -49,6 +120,11 @@ export class GridView {
   private labelsR: Labels = new Map();
   private cmp: Comparison | null = null;
   private current = -1;
+  /** What each rendered element shows: its kind and how much text is on each side. */
+  private meta = new WeakMap<HTMLElement, { kind: string; a: number; b: number }>();
+  /** Bumped whenever the rows are rendered again or change size. */
+  private gen = 0;
+  private measured: Layout | null = null;
 
   constructor(
     readonly el: HTMLElement,
@@ -67,6 +143,8 @@ export class GridView {
     this.labelsR = computeListLabels(cmp.right.blocks);
     this.el.classList.toggle('mono-a', !!cmp.left.mono);
     this.el.classList.toggle('mono-b', !!cmp.right.mono);
+    const numA = numbering(cmp.left);
+    const numB = numbering(cmp.right);
     const anchor = this.captureAnchor();
 
     const rows = cmp.rows;
@@ -91,10 +169,26 @@ export class GridView {
         e.classList.toggle('cur', row.hunk >= 0 && row.hunk === this.current);
         out.push(e);
       }
+      // Paragraph numbers for the gutter (shown when line numbers are on). Rows are
+      // reused across edits, so the numbers are set on every render.
+      const gut = els[0]?.children[1] as HTMLElement | undefined;
+      if (gut?.classList.contains('gut')) {
+        gut.dataset.na = row.l ? String(numA.get(row.l) ?? '') : '';
+        gut.dataset.nb = row.r ? String(numB.get(row.r) ?? '') : '';
+      }
       i++;
     }
     this.cache = nextCache;
     this.el.replaceChildren(...out);
+    this.gen++;
+    this.restoreAnchor(anchor);
+  }
+
+  /** Runs a change that resizes the rows (such as widening the gutter), keeping the reader's place. */
+  keepPlace(change: () => void): void {
+    const anchor = this.captureAnchor();
+    change();
+    this.gen++;
     this.restoreAnchor(anchor);
   }
 
@@ -124,7 +218,9 @@ export class GridView {
     const div = document.createElement('div');
     div.className = 'row fold';
     div.dataset.a = 'fold:' + key;
-    div.innerHTML = `<button type="button" class="fold-btn" data-fold="${esc(key)}">${icons.fold}<span>${count} unchanged ${count === 1 ? 'paragraph' : 'paragraphs'}</span></button>`;
+    // The label is shown on both columns, clear of the overview on the gutter.
+    const label = `${icons.fold}<span>${count} unchanged ${count === 1 ? 'paragraph' : 'paragraphs'}</span>`;
+    div.innerHTML = `<button type="button" class="fold-btn" data-fold="${esc(key)}"><span class="fold-side">${label}</span><span class="fold-side" aria-hidden="true">${label}</span></button>`;
     return div;
   }
 
@@ -137,7 +233,19 @@ export class GridView {
   private build(row: Row): HTMLElement[] {
     const tpl = document.createElement('template');
     tpl.innerHTML = this.rowHtml(row);
-    return Array.from(tpl.content.children) as HTMLElement[];
+    const els = Array.from(tpl.content.children) as HTMLElement[];
+    const kindOf = (el: HTMLElement) => /\bk-(\w+)/.exec(el.className)?.[1] ?? 'eq';
+    if (row.kind === 'table' && row.table && els.length === row.table.rows.length + 1) {
+      // A caption, then one element per table row.
+      this.meta.set(els[0]!, { kind: 'tcap', a: 0, b: 0 });
+      row.table.rows.forEach((sr, i) => {
+        const el = els[i + 1]!;
+        this.meta.set(el, { kind: kindOf(el), a: sr.l ? rowLength(sr.l) : 0, b: sr.r ? rowLength(sr.r) : 0 });
+      });
+    } else {
+      for (const el of els) this.meta.set(el, { kind: kindOf(el), a: row.l ? textLength(row.l) : 0, b: row.r ? textLength(row.r) : 0 });
+    }
+    return els;
   }
 
   private rowHtml(row: Row): string {
@@ -271,18 +379,6 @@ export class GridView {
     this.scroller.scrollTo({ top: target, behavior: smooth ? 'smooth' : 'auto' });
   }
 
-  /** First hunk whose rows are at or below the top of the viewport. */
-  hunkInView(): number {
-    const sr = this.scroller.getBoundingClientRect();
-    const head = (this.scroller.querySelector('.colheads') as HTMLElement | null)?.offsetHeight ?? 0;
-    for (const el of Array.from(this.el.querySelectorAll<HTMLElement>('.row[data-hunk]'))) {
-      const h = Number(el.dataset.hunk);
-      if (h < 0) continue;
-      if (el.getBoundingClientRect().bottom > sr.top + head) return h;
-    }
-    return -1;
-  }
-
   /* ------------------------------------------------------- anchoring */
 
   private captureAnchor(): Array<{ id: string; offset: number }> {
@@ -312,29 +408,60 @@ export class GridView {
     }
   }
 
-  /* --------------------------------------------------------- overview */
+  /* ----------------------------------------------------------- layout */
 
-  /** Positions (0–1) of each hunk in the scrollable content, for the overview ruler. */
-  hunkPositions(): Array<{ hunk: number; top: number; height: number; kind: string }> {
-    const total = this.scroller.scrollHeight || 1;
-    const sr = this.scroller.getBoundingClientRect();
-    const out: Array<{ hunk: number; top: number; height: number; kind: string }> = [];
-    const byHunk = new Map<number, { top: number; bottom: number; kinds: Set<string> }>();
-    for (const el of Array.from(this.el.querySelectorAll<HTMLElement>('.row[data-hunk]'))) {
-      const h = Number(el.dataset.hunk);
-      if (h < 0) continue;
-      const r = el.getBoundingClientRect();
-      const top = r.top - sr.top + this.scroller.scrollTop;
-      const e = byHunk.get(h) ?? { top, bottom: top, kinds: new Set<string>() };
-      e.bottom = Math.max(e.bottom, top + r.height);
-      const k = /k-(t?)(mod|del|ins)/.exec(el.className)?.[2];
-      if (k) e.kinds.add(k);
-      byHunk.set(h, e);
+  /**
+   * Where every row is in the scrolled content (the scroller and the grid are
+   * positioned, so offsets are in content coordinates). Measured again only
+   * when the rows were rendered or anything changed size. Rows far off screen
+   * have estimated heights until they are first shown.
+   */
+  layout(): Layout {
+    const sc = this.scroller;
+    const key = `${this.gen}:${sc.scrollHeight}:${sc.clientWidth}`;
+    if (this.measured?.key === key) return this.measured;
+    const gridTop = this.el.offsetTop;
+    const rows: RowBox[] = [];
+    const hunks: Array<HunkBox & { kinds: Set<string> }> = [];
+    for (const el of Array.from(this.el.children) as HTMLElement[]) {
+      const m = this.meta.get(el);
+      const top = gridTop + el.offsetTop;
+      const height = el.offsetHeight;
+      const hunk = el.dataset.hunk === undefined ? -1 : Number(el.dataset.hunk);
+      rows.push({ top, height, kind: m?.kind ?? 'fold', hunk, a: m?.a ?? 0, b: m?.b ?? 0 });
+      if (hunk < 0) continue;
+      let h = hunks[hunks.length - 1];
+      if (h?.hunk !== hunk) {
+        h = { hunk, top, bottom: top + height, kind: 'mod', kinds: new Set() };
+        hunks.push(h);
+      }
+      h.bottom = Math.max(h.bottom, top + height);
+      const k = m?.kind.replace(/^t/, '');
+      if (k === 'mod' || k === 'del' || k === 'ins') h.kinds.add(k);
     }
-    for (const [hunk, e] of byHunk) {
-      const kind = e.kinds.size === 1 ? [...e.kinds][0]! : 'mod';
-      out.push({ hunk, top: e.top / total, height: (e.bottom - e.top) / total, kind });
-    }
-    return out;
+    const ma = this.metrics('a');
+    const mb = this.metrics('b');
+    this.measured = {
+      key,
+      total: sc.scrollHeight,
+      head: (sc.querySelector('.colheads') as HTMLElement | null)?.offsetHeight ?? 0,
+      rows,
+      hunks: hunks.map(({ kinds, ...h }) => ({ ...h, kind: kinds.size === 1 ? ([...kinds][0] as HunkBox['kind']) : 'mod' })),
+      line: { a: ma.line, b: mb.line },
+      chars: { a: ma.chars, b: mb.chars },
+    };
+    return this.measured;
+  }
+
+  /** Line height and characters per line of one side's body text. */
+  private metrics(side: 'a' | 'b'): { line: number; chars: number } {
+    const cell = this.el.querySelector<HTMLElement>(`.row > .cell.${side}`);
+    if (!cell) return { line: 25, chars: 70 };
+    const cs = getComputedStyle(cell);
+    const size = parseFloat(cs.fontSize) || 16;
+    const line = parseFloat(cs.lineHeight) || size * 1.5;
+    const width = cell.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    const glyph = size * (this.el.classList.contains(`mono-${side}`) ? 0.6 : 0.47);
+    return { line, chars: Math.max(10, width / glyph) };
   }
 }

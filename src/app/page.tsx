@@ -84,7 +84,7 @@ export default function Home() {
           <a href="#formats">Formats</a>
         </nav>
         <div className={site.actions}>
-          <Link href="/compare/" className={`${site.pill} ${site.quiet} ${site.small} ${site.hideNarrow}`}>
+          <Link href="/compare/sample/" className={`${site.pill} ${site.quiet} ${site.small} ${site.hideNarrow}`}>
             See a sample
           </Link>
           <Link href="/compare/new/" className={`${site.pill} ${site.primary} ${site.small}`}>
@@ -117,7 +117,7 @@ export default function Home() {
           </div>
           <p className={styles.alt}>
             No file to hand?{' '}
-            <Link href="/compare/" className={site.textLink}>
+            <Link href="/compare/sample/" className={site.textLink}>
               See a sample comparison
               <Icon name="arrow" className={site.arrow} />
             </Link>
@@ -273,7 +273,7 @@ export default function Home() {
             </StartButton>
           </div>
           <p className={styles.finalLink}>
-            <Link href="/compare/">or see a sample comparison first</Link>
+            <Link href="/compare/sample/">or see a sample comparison first</Link>
           </p>
         </section>
       </main>

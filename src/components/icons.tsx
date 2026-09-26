@@ -18,6 +18,8 @@ const PATHS = {
   down: '<path d="M4 6l4 4 4-4"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   fold: '<path d="M4 6l4-3 4 3M4 10l4 3 4-3"/>',
+  sun: '<circle cx="8" cy="8" r="2.75"/><path d="M8 1.5v1.25M8 13.25v1.25M1.5 8h1.25M13.25 8h1.25M3.4 3.4l.9.9M11.7 11.7l.9.9M3.4 12.6l.9-.9M11.7 4.3l.9-.9"/>',
+  moon: '<path d="M13.5 9.6A5.75 5.75 0 1 1 6.4 2.5a4.6 4.6 0 0 0 7.1 7.1z"/>',
 };
 
 export type IconName = keyof typeof PATHS;

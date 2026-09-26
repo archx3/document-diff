@@ -32,7 +32,7 @@ test('the landing page asks for a file and leads to the sample', async ({ page }
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/See every change,\s*word by word\./);
   await expect(page.getByRole('heading', { name: 'Drop your first document here' })).toBeVisible();
   await page.getByRole('link', { name: 'See a sample comparison' }).first().click();
-  await expect(page).toHaveURL(/\/compare\/$/);
+  await expect(page).toHaveURL(/\/compare\/sample\/$/);
   await expect(page.locator('#counter')).toHaveText('Change 1 of 7');
 });
 
@@ -101,8 +101,30 @@ test('the new comparison page works on its own', async ({ page }) => {
   await expect(page.locator('.colhead .badge')).toHaveText(['OpenDocument', 'OpenDocument']);
 });
 
-test('the workspace name leads back to the landing page', async ({ page }) => {
+test('the workspace opened without documents asks for them', async ({ page }) => {
   await page.goto('/compare/');
+  await expect(page).toHaveURL(/\/compare\/new\/$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Choose the first version');
+  await expect(page.locator('.slot-name')).toHaveCount(0);
+});
+
+test('the chosen theme applies on every page', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('collate.theme', 'dark'));
+  for (const path of ['/', '/compare/new/', '/compare/sample/']) {
+    await page.goto(path);
+    await expect(page.locator('html'), path).toHaveAttribute('data-theme', 'dark');
+  }
+  // The site's header has the switch too.
+  await page.goto('/');
+  const toggle = page.getByRole('button', { name: 'Dark theme' });
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe('rgb(254, 241, 238)');
+});
+
+test('the workspace name leads back to the landing page', async ({ page }) => {
+  await page.goto('/compare/sample/');
   await page.getByRole('link', { name: 'Collate home' }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { level: 1 })).toContainText('See every change');

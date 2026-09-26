@@ -30,6 +30,12 @@
   --chg-tint: #e9f0f6; /* su-chip-blue */
   --fmt-mark: #cfddeb;
   --hatch: #ede2dd;
+  /* Documents with no differences: SettleMe's green as a success tint. */
+  --ok: #2a7e65;
+  --ok-tint: #e5f3ec;
+  --ok-line: #bddccb;
+  /* Low contrast mode: the one background shared by the desk and the sheets (here the sheets' white). */
+  --lowc: #ffffff;
   --backdrop: rgba(18, 48, 63, 0.45);
   --shadow: 0 18px 40px -16px rgba(22, 56, 75, 0.45), 0 2px 8px rgba(22, 56, 75, 0.08); /* su-pop */
   /* The rest of the palette, for the site's pages. */
@@ -37,6 +43,12 @@
   --teal-soft: #9fd0d2;
   --teal-btn: #31787c;
   --ring: rgba(71, 173, 180, 0.12);
+  /* Scrollbars: warm on the peach and white surfaces; the thin variant (SettleMe's line-item
+     drawers, here the list of changes) is a cooler teal tint. */
+  --scrollbar: #e7d6cf; /* su-scrollbar */
+  --scrollbar-hover: #d3bcb3; /* su-scrollbar-hover */
+  --scrollbar-thin: #d8e6e6; /* su-scrollbar-thin */
+  --scrollbar-thin-hover: #c4d9d9; /* su-scrollbar-thin-hover */
   --terra: #ce7058;
   --terra-ink: #a64831;
   --amber: #c77a3e;
@@ -57,7 +69,6 @@
   --font-ui: var(--font-plex-sans, 'IBM Plex Sans'), system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-doc: var(--font-source-serif, 'Source Serif 4'), 'Source Serif Pro', Georgia, 'Times New Roman', serif;
   --font-mono: var(--font-plex-mono, 'IBM Plex Mono'), ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
-  --gut: 76px;
   --pad: 16px;
   color-scheme: light;
 }
@@ -87,12 +98,21 @@
     --chg-tint: #1b2e3b;
     --fmt-mark: #345464;
     --hatch: #27404a;
+    --ok: #6bcba6;
+    --ok-tint: #163a30;
+    --ok-line: #2b5a4b;
+    /* The desk's navy: the sheets take the desk's colour. */
+    --lowc: #0b232b;
     --backdrop: rgba(3, 14, 18, 0.62);
     --shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
     --teal: #5bc3ca;
     --teal-soft: #35707b;
     --teal-btn: #5bc3ca;
     --ring: rgba(91, 195, 202, 0.18);
+    --scrollbar: #2e4c56;
+    --scrollbar-hover: #3a5d68;
+    --scrollbar-thin: #34555f;
+    --scrollbar-thin-hover: #40646f;
     --terra: #e7947b;
     --terra-ink: #e99d86;
     --amber: #e0a56e;
@@ -133,12 +153,20 @@
   --chg-tint: #1b2e3b;
   --fmt-mark: #345464;
   --hatch: #27404a;
+  --ok: #6bcba6;
+  --ok-tint: #163a30;
+  --ok-line: #2b5a4b;
+  --lowc: #0b232b;
   --backdrop: rgba(3, 14, 18, 0.62);
   --shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
   --teal: #5bc3ca;
   --teal-soft: #35707b;
   --teal-btn: #5bc3ca;
   --ring: rgba(91, 195, 202, 0.18);
+  --scrollbar: #2e4c56;
+  --scrollbar-hover: #3a5d68;
+  --scrollbar-thin: #34555f;
+  --scrollbar-thin-hover: #40646f;
   --terra: #e7947b;
   --terra-ink: #e99d86;
   --amber: #e0a56e;
@@ -198,11 +226,111 @@ kbd {
   flex: none;
 }
 
+/* ---------------------------------------------------------- scrollbars */
+
+/* SettleMe's branded scrollbars (packages/ui/src/tokens.css in the SettleMe repository): thin
+ * and theme-aware, on every scroll region and the page itself.
+ *
+ * The standard properties do the heavy lifting: Firefox and modern Chromium (Chrome, Edge
+ * 121+) honour `scrollbar-width` / `scrollbar-color`. They inherit, so one `*` rule brands
+ * every scroll region, the page's bar included. The colours flip with the theme. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar) transparent;
+}
+
+.scroll-thin {
+  scrollbar-color: var(--scrollbar-thin) transparent;
+}
+
+/* Safari has no support for the standard properties, so these pseudo-elements are its only
+ * branded bar: a rounded thumb, inset by a transparent padding-box border, darker on hover.
+ * (Chromium also reads them, but only where the standard properties above are unset.) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 99px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thin);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.scroll-thin::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thin-hover);
+}
+
 .app {
+  /* The gutter between the columns: line numbers, the copy arrows, and the overview (minimap,
+     ruler, minimap) in the middle, mirrored on each side. Views that are off take no room. */
+  --act-w: 28px;
+  --rail-w: 14px;
+  --ov-gap: 6px;
+  --num-w: 0px;
+  --map-w: 0px;
+  --map-gap: 0px;
+  --gut: calc(2 * (var(--num-w) + var(--act-w) + var(--ov-gap) + var(--map-w) + var(--map-gap)) + var(--rail-w) + 8px);
   height: 100%;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  background: var(--desk);
+}
+
+.app.with-lines {
+  --num-w: 34px;
+}
+
+.app.with-map {
+  --map-w: 26px;
+  --map-gap: 3px;
+}
+
+/* Low contrast: no borders round the sheets, and one background for the desk and the sheets.
+   In the light theme the desk turns white; in the dark theme the sheets take the desk's navy. */
+.app.lowc {
+  --desk: var(--lowc);
+}
+
+.app.lowc .stage {
+  --paper: var(--lowc);
+}
+
+.app.lowc .slot,
+.app.lowc .endcap::before,
+.app.lowc .endcap::after,
+.app.lowc .mm {
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.app.lowc .cell {
+  border-color: transparent !important;
+}
+
+.app.lowc .row.cur .cell {
+  border-inline-color: var(--accent) !important;
 }
 
 /* ------------------------------------------------------------ app bar */
@@ -316,6 +444,44 @@ a.brand-word {
   padding: 0;
 }
 
+/* An icon that opens a menu, with a small chevron after it. */
+.btn.icon-menu {
+  gap: 1px;
+  padding: 0 5px 0 8px;
+}
+
+.btn.icon-menu .ico + .ico {
+  opacity: 0.6;
+}
+
+/* The theme button shows the theme it switches to. */
+.theme-moon,
+.theme-sun {
+  display: flex;
+}
+
+.theme-sun {
+  display: none;
+}
+
+:root[data-theme='dark'] .theme-sun {
+  display: flex;
+}
+
+:root[data-theme='dark'] .theme-moon {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .theme-sun {
+    display: flex;
+  }
+
+  :root:not([data-theme='light']) .theme-moon {
+    display: none;
+  }
+}
+
 .btn.sm {
   height: 28px;
   padding: 0 9px;
@@ -365,10 +531,20 @@ a.brand-word {
   visibility: hidden;
 }
 
+/* A and B match: the toolbar says so in green. */
+.toolbar.same {
+  background: var(--ok-tint);
+  border-bottom-color: var(--ok-line);
+}
+
 .tgroup {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.tgroup.nav {
+  gap: 4px;
 }
 
 .tgroup.edit {
@@ -376,9 +552,12 @@ a.brand-word {
 }
 
 .counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font: 12.5px/1 var(--font-mono);
   color: var(--ink-2);
-  padding-left: 4px;
+  padding-left: 6px;
   font-variant-numeric: tabular-nums;
   min-width: 11ch;
 }
@@ -388,11 +567,14 @@ a.brand-word {
   font-weight: 500;
 }
 
+.counter .ico,
 .counter .same {
-  color: var(--b);
+  color: var(--ok);
 }
 
-
+.counter .same {
+  font-weight: 500;
+}
 
 .stats {
   gap: 14px;
@@ -427,7 +609,7 @@ a.brand-word {
 }
 
 .stat.ok {
-  color: var(--b);
+  color: var(--ok);
 }
 
 .stat.ok::before {
@@ -439,7 +621,7 @@ a.brand-word {
 .notice {
   display: grid;
   gap: 4px;
-  padding: 8px var(--pad);
+  padding: 6px 10px 6px var(--pad);
   background: var(--accent-soft);
   border-bottom: 1px solid var(--line);
   font-size: 13px;
@@ -448,9 +630,23 @@ a.brand-word {
 
 .notice-line {
   display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notice-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 14px;
+}
+
+.btn.notice-x {
+  flex: none;
+  width: 28px;
+  height: 28px;
 }
 
 /* -------------------------------------------------------------- stage */
@@ -462,7 +658,9 @@ a.brand-word {
   position: relative;
 }
 
+/* Positioned, so rows' offsets are measured in the scrolled content. */
 .scroller {
+  position: relative;
   flex: 1;
   min-width: 0;
   overflow: auto;
@@ -470,8 +668,12 @@ a.brand-word {
   scroll-padding-top: 120px;
 }
 
+.grid {
+  position: relative;
+}
+
 .scroller[hidden],
-.ruler[hidden] {
+.overview[hidden] {
   display: none !important;
 }
 
@@ -629,12 +831,57 @@ a.brand-word {
   border-top: 1px solid var(--line-2);
 }
 
+/* Line numbers on the outside, next to their sheet; the arrows inside them; the middle is left
+   for the overview, which stays put while the rows scroll. */
 .gut {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 5px;
-  padding-top: 7px;
+  display: grid;
+  grid-template-columns: var(--num-w) var(--act-w) minmax(0, 1fr) var(--act-w) var(--num-w);
+  align-items: start;
+  padding: 7px 4px 0;
+}
+
+.gut .act.to-a {
+  grid-area: 1 / 2;
+}
+
+.gut .act.to-b {
+  grid-area: 1 / 4;
+}
+
+.app.with-lines .gut::before,
+.app.with-lines .gut::after {
+  grid-row: 1;
+  overflow: hidden;
+  font: 500 11px/26px var(--font-mono);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.app.with-lines .gut::before {
+  content: attr(data-na);
+  grid-column: 1;
+  padding-left: 3px;
+}
+
+.app.with-lines .gut::after {
+  content: attr(data-nb);
+  grid-column: 5;
+  padding-right: 3px;
+  text-align: right;
+}
+
+/* Code and text files have shorter lines. */
+.app.with-lines .grid.mono-a .gut::before,
+.app.with-lines .grid.mono-b .gut::after {
+  margin-top: -4px;
+  line-height: 20px;
+}
+
+.app.with-lines .row.cur .gut::before,
+.app.with-lines .row.cur .gut::after {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .act {
@@ -657,10 +904,6 @@ a.brand-word {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
-}
-
-.row.cur .gut {
-  background: linear-gradient(var(--accent), var(--accent)) center / 2px 100% no-repeat;
 }
 
 .row.cur .act {
@@ -698,18 +941,16 @@ a.brand-word {
 }
 
 .row.fold {
-  display: block;
   padding: 6px 0;
 }
 
+/* One button with its label on each column, so the overview on the gutter never covers it. */
 .fold-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px;
-  border: 1px dashed var(--line);
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--gut) minmax(0, 1fr);
+  padding: 0;
+  border: 0;
   border-radius: 8px;
   background: transparent;
   color: var(--ink-3);
@@ -717,8 +958,25 @@ a.brand-word {
   cursor: pointer;
 }
 
+.fold-side {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+}
+
+.fold-side + .fold-side {
+  grid-column: 3;
+}
+
 .fold-btn:hover {
   color: var(--accent);
+}
+
+.fold-btn:hover .fold-side {
   border-color: var(--accent);
 }
 
@@ -1156,16 +1414,65 @@ ins.chg .obj-img {
   font-size: 12.5px;
 }
 
-/* -------------------------------------------------------------- ruler */
+/* ----------------------------------------------------------- overview */
 
-.ruler {
-  position: relative;
-  width: 12px;
-  margin: 72px 4px 12px 0;
+/* On the gutter between the columns, from below the column heads to the bottom of the stage.
+   The app centres it on the gutter. */
+.overview {
+  position: absolute;
+  z-index: 5;
+  bottom: 12px;
+  display: flex;
+  gap: var(--map-gap);
+  transform: translateX(-50%);
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.overview.over-view {
+  cursor: grab;
+}
+
+.overview.dragging,
+.overview.dragging .mark {
+  cursor: grabbing;
+}
+
+/* The ruler's track. */
+.overview::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--map-w) + var(--map-gap));
+  width: var(--rail-w);
   border-radius: 6px;
   background: var(--line-2);
-  cursor: pointer;
+}
+
+/* Each document in miniature, A to the left of the ruler and B to the right. */
+.mm {
+  display: none;
   flex: none;
+  width: var(--map-w);
+  height: 100%;
+  border-radius: 4px;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px var(--line);
+}
+
+.app.with-map .mm {
+  display: block;
+}
+
+/* The marks sit above the frame so they can still be clicked inside it. */
+.ruler {
+  position: relative;
+  z-index: 2;
+  flex: none;
+  width: var(--rail-w);
 }
 
 .ruler .mark {
@@ -1175,6 +1482,7 @@ ins.chg .obj-img {
   border-radius: 2px;
   background: var(--chg);
   opacity: 0.9;
+  cursor: pointer;
 }
 
 .ruler .m-del {
@@ -1191,14 +1499,254 @@ ins.chg .obj-img {
   box-shadow: 0 0 0 2px var(--accent);
 }
 
+/* The part of the documents on screen, across the ruler and both minimaps. The overview handles
+   the pointer itself, so the frame lets it through. */
 .ruler-view {
   position: absolute;
-  left: 0;
-  right: 0;
-  border-radius: 4px;
+  z-index: 1;
+  left: -3px;
+  right: -3px;
+  min-height: 6px;
+  border-radius: 5px;
   border: 1px solid var(--ink-3);
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
   pointer-events: none;
+}
+
+.overview.over-view .ruler-view,
+.overview.dragging .ruler-view {
+  border-color: var(--ink-2);
+  background: color-mix(in srgb, var(--ink) 11%, transparent);
+}
+
+/* ---------------------------------------------------- list of changes */
+
+.changes {
+  flex: none;
+  width: 340px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.changes-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.changes-head h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 auto 0 0;
+  font: 600 15px/1.2 var(--font-ui);
+  color: var(--accent);
+}
+
+.changes-count {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  font: 500 11.5px/1 var(--font-mono);
+}
+
+.changes-count:empty {
+  display: none;
+}
+
+.changes-list {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  list-style: none;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.changes-list > li {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 92px;
+}
+
+.chg-card {
+  display: block;
+  width: 100%;
+  padding: 10px 12px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 13px/1.4 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+
+.chg-card:hover {
+  border-color: var(--ink-3);
+}
+
+.chg-card.cur {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.chg-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font: 600 11px/1.3 var(--font-ui);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.chg-n {
+  color: var(--ink-2);
+}
+
+.chg-counts {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  font: 500 12.5px/1 var(--font-mono);
+  letter-spacing: 0;
+}
+
+.chg-counts .minus {
+  color: var(--a);
+}
+
+.chg-counts .plus {
+  color: var(--b);
+}
+
+.chg-counts .minus + .plus {
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--line);
+}
+
+.chg-line {
+  display: -webkit-box;
+  margin-top: 7px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  font: 14px/1.5 var(--font-doc);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.chg-line.a + .chg-line.b {
+  margin-top: 3px;
+}
+
+.chg-line del,
+.chg-line ins,
+.chg-line mark {
+  padding: 1px 1px;
+  border-radius: 3px;
+  color: var(--ink);
+  text-decoration: none;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.chg-line del {
+  background: var(--a-mark);
+}
+
+.chg-line ins {
+  background: var(--b-mark);
+}
+
+.chg-line mark.fmt {
+  background: var(--fmt-mark);
+  text-decoration: underline dotted var(--chg);
+  text-underline-offset: 3px;
+}
+
+.chg-note,
+.chg-more {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.chg-note {
+  color: var(--chg);
+}
+
+.chg-more {
+  color: var(--ink-3);
+}
+
+.changes-none {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 4px;
+  color: var(--ok);
+  font-weight: 500;
+}
+
+/* Read by screen readers, not shown. */
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ------------------------------------------------------------ tooltip */
+
+.tip {
+  position: fixed;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 300px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: var(--ink);
+  color: var(--paper);
+  font: 500 12px/1.35 var(--font-ui);
+  box-shadow: 0 6px 16px -6px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation: tip-in 0.12s ease-out;
+}
+
+.tip kbd {
+  flex: none;
+  border-color: color-mix(in srgb, var(--paper) 30%, transparent);
+  background: color-mix(in srgb, var(--paper) 14%, transparent);
+  color: inherit;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
 }
 
 /* -------------------------------------------------------- empty state */
@@ -1703,9 +2251,32 @@ ins.chg .obj-img {
   }
 }
 
+/* Too narrow to give the documents room beside it: the list of changes covers them. */
+@media (max-width: 1099px) {
+  .changes {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9;
+    width: min(360px, 100%);
+    box-shadow: var(--shadow);
+  }
+}
+
 @media (max-width: 860px) {
-  :root {
-    --gut: 64px;
+  .app {
+    --act-w: 26px;
+    --rail-w: 12px;
+    --ov-gap: 4px;
+  }
+
+  .app.with-lines {
+    --num-w: 30px;
+  }
+
+  .app.with-map {
+    --map-w: 22px;
   }
 
   .cell {
@@ -1728,15 +2299,6 @@ ins.chg .obj-img {
   .slot-actions .btn {
     flex: 1;
   }
-
-  .appbar-actions .btn span {
-    display: none;
-  }
-
-  .appbar-actions .btn {
-    width: 32px;
-    padding: 0;
-  }
 }
 
 @media (max-width: 640px) {
@@ -1753,9 +2315,12 @@ ins.chg .obj-img {
     padding-bottom: 10px;
   }
 
+  /* No gutter to put the overview, minimaps or line numbers on. */
   .colhead.gut,
   .endcap,
-  .ruler {
+  .overview,
+  #btn-minimap,
+  #btn-lines {
     display: none;
   }
 
@@ -1805,19 +2370,40 @@ ins.chg .obj-img {
 
   .gut {
     order: 3;
+    display: flex;
     justify-content: flex-end;
+    gap: 5px;
     padding: 6px 10px;
     background: var(--paper);
     border-inline: 1px solid var(--line);
     border-bottom: 1px solid var(--line-2);
   }
 
-  .gut:empty {
+  .gut:empty,
+  .app.with-lines .gut::before,
+  .app.with-lines .gut::after {
     display: none;
   }
 
   .row.cur .gut {
     background: var(--accent-soft);
+  }
+
+  .fold-btn {
+    display: flex;
+  }
+
+  .fold-side {
+    flex: 1;
+  }
+
+  .fold-side + .fold-side {
+    display: none;
+  }
+
+  .changes {
+    width: 100%;
+    border-left: 0;
   }
 
   .ph {
@@ -1832,12 +2418,15 @@ ins.chg .obj-img {
     margin-left: auto;
   }
 
-  .tgroup.view .btn span,
-  .tgroup.view .btn .ico:last-child:not(:first-child) {
+  .tgroup {
+    gap: 4px;
+  }
+
+  .btn.icon-menu .ico + .ico {
     display: none;
   }
 
-  .tgroup.view .btn {
+  .btn.icon-menu {
     width: 32px;
     padding: 0;
   }

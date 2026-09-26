@@ -19,12 +19,13 @@ Compare two versions of a document side by side, see every difference down to th
   - Files are recognized by their content, so a `.doc` that is really RTF or a web page still loads.
   - Drop two files at once and they load as A and B.
 - **Compare.** Paragraphs are lined up side by side, and rewritten paragraphs are paired with their counterpart instead of showing as removed and added. Inside a paragraph, words only in A are red, words only in B are green, and a caret marks where the other side has extra text. Formatting-only changes (bold, italic, link targets, heading level, list type, alignment) are flagged separately. Tables are compared row by row and cell by cell. Images, footnote text, fields and equations count too.
+- **Find your way.** The ruler between the columns has a mark for every change: click a mark to go to it, or drag its frame (the part of the documents on screen) to scroll. The minimap draws each document in miniature on either side of the ruler. The list of changes names every change with its words, and how many words are only in A (−) and only in B (+); click one to go there. Buttons step to the next or previous change or page, and are greyed out where there is nowhere to go. When A and B match, the toolbar turns green.
 - **Copy changes across**, in either direction:
-  - a whole paragraph (the arrows between the columns);
+  - a whole paragraph (the arrows either side of the ruler);
   - a single word-level edit (click a highlighted word);
   - a single table row, or the whole table;
   - the current change (<kbd>Alt</kbd>+<kbd>→</kbd> / <kbd>Alt</kbd>+<kbd>←</kbd>);
-  - everything (*Copy all › Make B match A*).
+  - everything (*Copy changes › Make B match A*).
 
   Every copy can be undone and redone.
 - **Get the result out** (*Export* on either side). A document is offered in its own format first:
@@ -51,17 +52,23 @@ Compare two versions of a document side by side, see every difference down to th
 - ignore empty paragraphs (on by default);
 - ignore formatting, letter case, extra spaces, or curly versus straight quotes and dashes.
 
-*Changes only* folds unchanged paragraphs away. The strip on the right edge shows where every change is; click it to jump.
+*Changes only* folds unchanged paragraphs away. The other view buttons show the minimap, line numbers in the gutter (paragraph numbers, which for text and code files are their line numbers), the list of changes, and a low contrast mode without borders, where the sheets and the desk share one colour. These are remembered in the browser.
+
+The theme button switches between light and dark. The choice applies to every page and is remembered; picking the system's own theme again goes back to following the system. Notes about the documents (such as a PDF not being editable in place) can be dismissed.
 
 ### Keyboard
 
 | Keys | Action |
 | --- | --- |
 | <kbd>N</kbd> / <kbd>P</kbd> (or <kbd>J</kbd> / <kbd>K</kbd>) | Next / previous change |
+| <kbd>Page Down</kbd> / <kbd>Page Up</kbd> | Next / previous page |
 | <kbd>Alt</kbd>+<kbd>→</kbd> | Use A's version of the current change in B |
 | <kbd>Alt</kbd>+<kbd>←</kbd> | Use B's version of the current change in A |
 | <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | Undo, redo |
 | <kbd>C</kbd> | Changes only |
+| <kbd>S</kbd> | List of changes |
+| <kbd>M</kbd> | Minimap |
+| <kbd>L</kbd> | Line numbers |
 | <kbd>?</kbd> | Help |
 
 ### What is and isn't compared
@@ -86,13 +93,14 @@ npm run preview      # serves out/ at http://localhost:4173
 npm run build:single # one self-contained file: dist-single/collate.html
 ```
 
-The site has three pages:
+The site has four pages:
 
 - `/` is the landing page. Dropping a file on it, or choosing one, starts a comparison.
 - `/compare/new/` asks for the other version, which must be the same kind of file as the first (Word with Word, PDF with PDF and so on), then opens the two in the workspace. Opened on its own, it asks for both files in turn.
-- `/compare/` is the comparison workspace. Opened directly, it shows the sample drafts; any two documents, in any mix of formats, can be loaded there.
+- `/compare/` is the comparison workspace for the two documents chosen there; any two documents, in any mix of formats, can then be loaded in it. The documents are only kept in memory, so opened directly (or reloaded) it goes to `/compare/new/`.
+- `/compare/sample/` is the workspace with the sample drafts.
 
-`dist-single/collate.html` is the workspace on its own, built by Vite from `index.html` and `src/main.ts`. It works when opened straight from disk, so you can share it as a single file (about 330 KB). It loads [pdf.js](https://mozilla.github.io/pdf.js/) from jsDelivr the first time a PDF is opened, pinned to the installed version by an import map with integrity hashes; the regular build serves its own copy of pdf.js and loads it only when a PDF is opened. Both builds load pdfmake from jsDelivr (with a subresource integrity check) when a PDF is first saved.
+`dist-single/collate.html` is the workspace on its own, starting with the sample drafts, built by Vite from `index.html` and `src/main.ts`. It works when opened straight from disk, so you can share it as a single file (about 360 KB). It loads [pdf.js](https://mozilla.github.io/pdf.js/) from jsDelivr the first time a PDF is opened, pinned to the installed version by an import map with integrity hashes; the regular build serves its own copy of pdf.js and loads it only when a PDF is opened. Both builds load pdfmake from jsDelivr (with a subresource integrity check) when a PDF is first saved.
 
 ### GitHub Pages
 
@@ -116,7 +124,7 @@ Fixtures are generated by `python3 scripts/make_fixtures.py`, which also runs `s
 
 ```
 src/
-  app/             Next.js pages: the landing page, /compare and /compare/new
+  app/             Next.js pages: the landing page, /compare, /compare/new and /compare/sample
   components/      the site's React components; workspace.tsx runs the app in ui/
   lib/handoff.ts   carries the chosen files and documents from page to page
   core/            format-neutral model and algorithms
@@ -139,7 +147,8 @@ src/
     epub/          EPUB reader
     html/          pasted/HTML reader, HTML/Markdown/text export
     text/          Markdown, plain-text, CSV/TSV readers and writers
-  ui/              the workspace: app shell, aligned grid, rendering
+  ui/              the workspace: app shell, aligned grid, rendering, the overview
+                   (ruler and minimaps), the list of changes, tooltips and themes
 ```
 
 - **Comparison.** Each paragraph gets a signature from its style and tokens, and the two paragraph sequences are diffed with Myers' algorithm. Within each changed region, a small dynamic program pairs up paragraphs whose words overlap enough. Paired paragraphs are then diffed word by word. The cleanup step folds short common stretches into a single edit, so a rewritten phrase reads as one change.

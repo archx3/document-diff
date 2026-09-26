@@ -19,10 +19,14 @@ import { ACCEPTED_EXTENSIONS, LoadError, googleDocId, loadFile, loadPaste } from
 import { odtBackend } from '../formats/odt/backend';
 import { OdtPackage } from '../formats/odt/package';
 import { SAMPLE_A, SAMPLE_A_NAME, SAMPLE_B, SAMPLE_B_NAME } from '../samples/sample';
+import { changeListHtml } from './changes';
 import { copyRich, hostedInViewer, inViewer, saveFile, viewerReady } from './files';
 import { GridView } from './grid';
 import { icons } from './icons';
+import { Overview } from './overview';
 import { esc } from './render';
+import { applyStoredTheme, currentTheme, onSystemThemeChange, toggleTheme } from './theme';
+import { Tooltips } from './tooltip';
 
 type Side = 'a' | 'b';
 
@@ -33,10 +37,22 @@ interface Snapshot {
   sample: boolean;
 }
 
+/** View settings kept in this browser. */
+interface Prefs {
+  opts?: Partial<CompareOptions>;
+  changesOnly?: boolean;
+  minimap?: boolean;
+  lines?: boolean;
+  lowContrast?: boolean;
+  sidebar?: boolean;
+}
+
 const PREFS_KEY = 'collate.prefs.v1';
 const ACCEPT = ACCEPTED_EXTENSIONS.map((e) => `.${e}`).join(',');
 const SIDE_NAME: Record<Side, string> = { a: 'A', b: 'B' };
 const other = (s: Side): Side => (s === 'a' ? 'b' : 'a');
+/** Below this width the list of changes covers the documents instead of sitting beside them. */
+const PANEL_OVERLAYS = '(max-width: 1099px)';
 
 function kindLabel(doc: Doc): string {
   if (doc.formatLabel) return doc.formatLabel;
@@ -70,6 +86,11 @@ function plural(n: number, one: string, many = one + 's'): string {
   return `${n.toLocaleString()} ${n === 1 ? one : many}`;
 }
 
+/** "a", "a and b", "a, b and c". */
+function listText(items: string[]): string {
+  return items.length < 2 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
 function baseName(doc: Doc): string {
   return doc.name.replace(/\.[a-z0-9]{1,8}$/i, '').trim() || 'document';
 }
@@ -84,9 +105,36 @@ function isTyping(e: Event): boolean {
   return t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
 }
 
+interface ToolOptions {
+  /** Shortcut as shown, and in aria-keyshortcuts form when that differs. */
+  kbd?: string;
+  keys?: string;
+  /** Tooltip, when it says more than the label. */
+  tip?: string;
+  toggle?: boolean;
+  menu?: boolean;
+  ghost?: boolean;
+  cls?: string;
+  /** More attributes, as written. */
+  attrs?: string;
+}
+
+/** An icon button: the label is its accessible name and tooltip. */
+function tool(id: string, icon: string, label: string, o: ToolOptions = {}): string {
+  const cls = ['btn', o.menu ? 'icon-menu' : 'icon-only', o.ghost ? 'ghost' : '', o.toggle ? 'toggle' : '', o.cls ?? ''].filter(Boolean).join(' ');
+  let attrs = `type="button" class="${cls}" id="${id}" aria-label="${esc(label)}" data-tip="${esc(o.tip ?? label)}"`;
+  if (o.kbd) attrs += ` data-kbd="${esc(o.kbd)}" aria-keyshortcuts="${esc(o.keys ?? o.kbd)}"`;
+  if (o.toggle) attrs += ' aria-pressed="false"';
+  if (o.menu) attrs += ' aria-haspopup="true"';
+  if (o.attrs) attrs += ` ${o.attrs}`;
+  return `<button ${attrs}>${icon}${o.menu ? icons.caret : ''}</button>`;
+}
+
 export interface AppOptions {
-  /** Documents to compare straight away, instead of the sample drafts. */
+  /** Documents to compare straight away. */
   docs?: { a: Doc; b: Doc | null };
+  /** Without documents, show the sample drafts instead of asking for two. */
+  sample?: boolean;
   /** Where the name in the app bar links to. */
   home?: string;
 }
@@ -97,6 +145,10 @@ export class App {
   private sample = false;
   private opts: CompareOptions = { ...DEFAULT_OPTIONS };
   private changesOnly = false;
+  private minimap = false;
+  private lines = false;
+  private lowContrast = false;
+  private sidebar = false;
   private expanded = new Set<string>();
   private cmp: Comparison | null = null;
   private current = -1;
@@ -104,6 +156,7 @@ export class App {
   private redoStack: Array<Snapshot & { label: string }> = [];
   private edits = { a: 0, b: 0 };
   private grid!: GridView;
+  private overview!: Overview;
   private el!: {
     root: HTMLElement;
     toolbar: HTMLElement;
@@ -115,8 +168,10 @@ export class App {
     colheads: HTMLElement;
     gridEl: HTMLElement;
     empty: HTMLElement;
-    ruler: HTMLElement;
-    rulerView: HTMLElement;
+    overview: HTMLElement;
+    changes: HTMLElement;
+    changesList: HTMLElement;
+    changesCount: HTMLElement;
     toasts: HTMLElement;
     pop: HTMLElement;
     dlg: HTMLDialogElement;
@@ -125,9 +180,17 @@ export class App {
   };
   private fileTarget: Side = 'a';
   private popAnchor: HTMLElement | null = null;
-  private rulerFrame = 0;
+  private frame = 0;
   /** The reader scrolled by hand since the last jump to a change. */
   private userScrolled = false;
+  /** Which navigation buttons are off, to touch them only when that changes. */
+  private navState = '';
+  /** Notices the reader closed, which stay closed while the page is open. */
+  private readonly dismissed = new Set<string>();
+  /** The comparison the list of changes was built for. */
+  private listed: Comparison | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private stopThemeWatch: () => void = () => {};
   /** Removes the listeners the app adds to the window and document. */
   private readonly listeners = new AbortController();
 
@@ -135,17 +198,22 @@ export class App {
     private readonly host: HTMLElement,
     options: AppOptions = {},
   ) {
+    applyStoredTheme();
     this.loadPrefs();
     this.buildShell(options.home);
     this.bind();
+    this.applyView();
     if (options.docs) this.loadDocs(options.docs.a, options.docs.b);
-    else this.loadSamples();
+    else if (options.sample) this.loadSamples();
+    else this.refresh();
   }
 
   /** Takes the app off the page. */
   destroy(): void {
     this.listeners.abort();
-    cancelAnimationFrame(this.rulerFrame);
+    this.resizeObserver?.disconnect();
+    this.stopThemeWatch();
+    cancelAnimationFrame(this.frame);
     this.host.innerHTML = '';
   }
 
@@ -156,31 +224,41 @@ export class App {
     const brand = home
       ? `<a class="brand-word" href="${esc(home)}" aria-label="Collate home">${word}</a>`
       : `<span class="brand-word" role="img" aria-label="Collate">${word}</span>`;
+    const themeIcon = `<span class="theme-moon">${icons.moon}</span><span class="theme-sun">${icons.sun}</span>`;
     this.host.innerHTML = `
 <div class="app">
   <header class="appbar">
     <div class="brand">${brand}<span class="brand-tag">Compare two documents and copy changes across</span></div>
     <div class="appbar-actions">
-      <button type="button" class="btn ghost" id="btn-swap" title="Swap A and B">${icons.swap}<span>Swap</span></button>
-      <button type="button" class="btn ghost" id="btn-new" title="Start again with two new documents">${icons.open}<span>New comparison</span></button>
-      <button type="button" class="btn ghost icon-only" id="btn-help" title="Help and keyboard shortcuts (?)" aria-label="Help">${icons.help}</button>
+      ${tool('btn-swap', icons.swap, 'Swap A and B', { ghost: true })}
+      ${tool('btn-new', icons.newDoc, 'New comparison', { ghost: true, tip: 'New comparison: start again with two documents' })}
+      ${tool('btn-theme', themeIcon, 'Dark theme', { ghost: true, cls: 'theme-btn', tip: 'Switch to the dark theme', attrs: 'aria-pressed="false"' })}
+      ${tool('btn-help', icons.help, 'Help and keyboard shortcuts', { ghost: true, kbd: '?' })}
     </div>
   </header>
-  <div class="toolbar" id="toolbar" role="toolbar" aria-label="Changes">
+  <div class="toolbar" id="toolbar" role="toolbar" aria-label="Comparison tools">
     <div class="tgroup nav">
-      <button type="button" class="btn icon-only" id="btn-prev" title="Previous change (P)" aria-label="Previous change">${icons.up}</button>
-      <button type="button" class="btn icon-only" id="btn-next" title="Next change (N)" aria-label="Next change">${icons.down}</button>
+      ${tool('btn-page-prev', icons.pageUp, 'Previous page', { kbd: 'Page Up', keys: 'PageUp' })}
+      ${tool('btn-prev', icons.up, 'Previous change', { kbd: 'P' })}
+      ${tool('btn-next', icons.down, 'Next change', { kbd: 'N' })}
+      ${tool('btn-page-next', icons.pageDown, 'Next page', { kbd: 'Page Down', keys: 'PageDown' })}
       <span class="counter" id="counter" aria-live="polite"></span>
     </div>
     <div class="tgroup stats" id="stats"></div>
     <div class="tgroup view">
-      <button type="button" class="btn toggle" id="btn-changes" aria-pressed="false" aria-label="Changes only" title="Hide unchanged paragraphs (C)">${icons.fold}<span>Changes only</span></button>
-      <button type="button" class="btn" id="btn-options" aria-haspopup="true" aria-label="Compare options" title="What counts as a difference">${icons.sliders}<span>Compare</span>${icons.chevron}</button>
+      ${tool('btn-changes', icons.fold, 'Changes only', { toggle: true, kbd: 'C', tip: 'Changes only: fold unchanged paragraphs' })}
+      ${tool('btn-minimap', icons.minimap, 'Minimap', { toggle: true, kbd: 'M', tip: 'Minimap of each document beside the ruler' })}
+      ${tool('btn-lines', icons.lineNumbers, 'Line numbers', { toggle: true, kbd: 'L', tip: 'Line numbers in the gutter' })}
+      ${tool('btn-contrast', icons.contrast, 'Low contrast', { toggle: true, tip: 'Low contrast: no borders, one background' })}
+      ${tool('btn-options', icons.sliders, 'Compare options', { menu: true, tip: 'Compare options: what counts as a difference' })}
     </div>
     <div class="tgroup edit">
-      <button type="button" class="btn icon-only" id="btn-undo" title="Undo (Ctrl+Z)" aria-label="Undo">${icons.undo}</button>
-      <button type="button" class="btn icon-only" id="btn-redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">${icons.redo}</button>
-      <button type="button" class="btn" id="btn-all" aria-haspopup="true"><span>Copy all</span>${icons.chevron}</button>
+      ${tool('btn-undo', icons.undo, 'Undo', { kbd: 'Ctrl+Z', keys: 'Control+Z Meta+Z' })}
+      ${tool('btn-redo', icons.redo, 'Redo', { kbd: 'Ctrl+Shift+Z', keys: 'Control+Shift+Z Meta+Shift+Z' })}
+      ${tool('btn-all', icons.merge, 'Copy changes', { menu: true, tip: 'Copy this change or every change across' })}
+    </div>
+    <div class="tgroup panel">
+      ${tool('btn-sidebar', icons.sidebar, 'List of changes', { toggle: true, kbd: 'S', attrs: 'aria-controls="changes"' })}
     </div>
   </div>
   <div class="notice" id="notice" hidden></div>
@@ -190,7 +268,19 @@ export class App {
       <div class="grid" id="grid"></div>
       <div class="endcap"></div>
     </div>
-    <div class="ruler" id="ruler" aria-hidden="true"><div class="ruler-view" id="ruler-view"></div></div>
+    <div class="overview" id="overview" aria-hidden="true">
+      <canvas class="mm a"></canvas>
+      <div class="ruler"></div>
+      <canvas class="mm b"></canvas>
+      <div class="ruler-view"></div>
+    </div>
+    <aside class="changes" id="changes" aria-labelledby="changes-title" hidden>
+      <div class="changes-head">
+        <h2 id="changes-title">Changes <span class="changes-count" id="changes-count"></span></h2>
+        <button type="button" class="btn ghost icon-only" data-close-changes aria-label="Close the list of changes" data-tip="Close">${icons.close}</button>
+      </div>
+      <ol class="changes-list scroll-thin" id="changes-list"></ol>
+    </aside>
     <div class="empty" id="empty" hidden></div>
   </main>
   <div class="toasts" id="toasts" aria-live="polite"></div>
@@ -214,8 +304,10 @@ export class App {
       colheads: $('colheads'),
       gridEl: $('grid'),
       empty: $('empty'),
-      ruler: $('ruler'),
-      rulerView: $('ruler-view'),
+      overview: $('overview'),
+      changes: $('changes'),
+      changesList: $('changes-list'),
+      changesCount: $('changes-count'),
       toasts: $('toasts'),
       pop: $('pop'),
       dlg: $<HTMLDialogElement>('dlg'),
@@ -223,6 +315,48 @@ export class App {
       overlay: $('drop-overlay'),
     };
     this.grid = new GridView(this.el.gridEl, this.el.scroller);
+    this.overview = new Overview(
+      this.el.overview,
+      this.el.scroller,
+      this.grid,
+      {
+        go: (h) => {
+          this.userScrolled = false;
+          this.setCurrent(h, true);
+        },
+        scrolled: () => {
+          this.userScrolled = true;
+          this.closePop();
+        },
+      },
+      this.listeners.signal,
+    );
+  }
+
+  private btn(id: string): HTMLButtonElement {
+    return this.host.querySelector<HTMLButtonElement>('#' + id)!;
+  }
+
+  /** Turns a button on or off. A button that goes off while it has keyboard focus hands focus to its neighbour. */
+  private disable(id: string, off: boolean): void {
+    const b = this.btn(id);
+    if (!b || b.disabled === off) return;
+    const focused = off && document.activeElement === b;
+    b.disabled = off;
+    if (!focused) return;
+    const group = Array.from(b.parentElement?.querySelectorAll<HTMLButtonElement>('button') ?? []);
+    const i = group.indexOf(b);
+    for (let d = 1; d < group.length; d++) {
+      const next = [group[i - d], group[i + d]].find((x) => x && !x.disabled);
+      if (next) {
+        next.focus();
+        return;
+      }
+    }
+  }
+
+  private press(id: string, on: boolean): void {
+    this.btn(id).setAttribute('aria-pressed', String(on));
   }
 
   /* ------------------------------------------------------------ prefs */
@@ -231,17 +365,23 @@ export class App {
     try {
       const raw = localStorage.getItem(PREFS_KEY);
       if (!raw) return;
-      const p = JSON.parse(raw) as { opts?: Partial<CompareOptions>; changesOnly?: boolean };
+      const p = JSON.parse(raw) as Prefs;
       this.opts = { ...DEFAULT_OPTIONS, ...p.opts };
       this.changesOnly = !!p.changesOnly;
+      this.minimap = !!p.minimap;
+      this.lines = !!p.lines;
+      this.lowContrast = !!p.lowContrast;
+      // An open list would cover a narrow screen's documents; it opens on request there.
+      this.sidebar = !!p.sidebar && !this.panelOverlays();
     } catch {
       /* storage unavailable */
     }
   }
 
   private savePrefs(): void {
+    const p: Prefs = { opts: this.opts, changesOnly: this.changesOnly, minimap: this.minimap, lines: this.lines, lowContrast: this.lowContrast, sidebar: this.sidebar };
     try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify({ opts: this.opts, changesOnly: this.changesOnly }));
+      localStorage.setItem(PREFS_KEY, JSON.stringify(p));
     } catch {
       /* storage unavailable */
     }
@@ -251,18 +391,25 @@ export class App {
 
   private bind(): void {
     const on = (id: string, fn: (e: MouseEvent) => void) => this.host.querySelector('#' + id)!.addEventListener('click', (e) => fn(e as MouseEvent));
+    on('btn-page-prev', () => this.page(-1));
+    on('btn-page-next', () => this.page(1));
     on('btn-prev', () => this.step(-1));
     on('btn-next', () => this.step(1));
     on('btn-undo', () => this.undo());
     on('btn-redo', () => this.redo());
     on('btn-swap', () => this.swap());
     on('btn-new', () => this.startOver());
+    on('btn-theme', () => this.switchTheme());
     on('btn-help', () => this.openHelp());
     on('btn-changes', () => this.toggleChangesOnly());
+    on('btn-minimap', () => this.toggleMinimap());
+    on('btn-lines', () => this.toggleLines());
+    on('btn-contrast', () => this.toggleLowContrast());
+    on('btn-sidebar', () => this.toggleSidebar());
     on('btn-options', (e) => this.openOptions(e.currentTarget as HTMLElement));
     on('btn-all', (e) => this.openCopyAll(e.currentTarget as HTMLElement));
 
-    // Stage and notice bar use delegation; the popover and dialog have their own handlers.
+    // Stage, notice bar and list of changes use delegation; the popover and dialog have their own handlers.
     this.el.root.addEventListener('click', (e) => {
       // composedPath() is fixed at dispatch time, so it still holds nodes a handler removed.
       const path = e.composedPath();
@@ -273,7 +420,7 @@ export class App {
     this.el.gridEl.addEventListener('mouseout', (e) => this.onHover(e, false));
     this.el.scroller.addEventListener('scroll', () => {
       this.closePop();
-      this.scheduleRuler();
+      this.scheduleFrame();
     });
     const manual = () => {
       this.userScrolled = true;
@@ -287,11 +434,22 @@ export class App {
     this.el.scroller.addEventListener('keydown', (e) => {
       if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) manual();
     });
-    this.el.ruler.addEventListener('click', (e) => this.onRulerClick(e));
     this.onWindow('resize', () => {
       this.closePop();
-      this.scheduleRuler();
+      this.scheduleFrame();
     });
+    if (typeof ResizeObserver === 'function') {
+      // The overview follows the gutter when the columns or their heads change size.
+      this.resizeObserver = new ResizeObserver(() => {
+        this.placeOverview();
+        this.scheduleFrame();
+      });
+      this.resizeObserver.observe(this.el.scroller);
+      this.resizeObserver.observe(this.el.colheads);
+    }
+    this.stopThemeWatch = onSystemThemeChange(() => this.themeChanged());
+    new Tooltips(this.el.root, this.listeners.signal);
+    this.renderThemeButton();
 
     this.el.file.addEventListener('change', () => {
       const files = Array.from(this.el.file.files ?? []);
@@ -384,6 +542,15 @@ export class App {
       return;
     }
     if (mod) return;
+    if ((k === 'PageDown' || k === 'PageUp') && !e.altKey && !e.shiftKey) {
+      // Inside the documents or the list of changes, the key scrolls that; anywhere else it pages the documents.
+      const t = e.target as Node;
+      if (!this.el.scroller.contains(t) && !this.el.changes.contains(t)) {
+        e.preventDefault();
+        this.page(k === 'PageDown' ? 1 : -1);
+      }
+      return;
+    }
     if (e.altKey && k === 'ArrowRight') {
       e.preventDefault();
       this.applyCurrent('l2r');
@@ -415,6 +582,15 @@ export class App {
       case 'c':
         this.toggleChangesOnly();
         break;
+      case 'm':
+        this.toggleMinimap();
+        break;
+      case 'l':
+        this.toggleLines();
+        break;
+      case 's':
+        this.toggleSidebar();
+        break;
       case '?':
         this.openHelp();
         break;
@@ -436,6 +612,21 @@ export class App {
 
   private onStageClick(e: MouseEvent): void {
     const t = e.target as HTMLElement;
+    const dismiss = t.closest<HTMLElement>('[data-dismiss]');
+    if (dismiss) {
+      this.dismissNotice(dismiss.dataset.dismiss!);
+      return;
+    }
+    const card = t.closest<HTMLElement>('.chg-card');
+    if (card) {
+      this.goToChange(Number(card.dataset.hunk));
+      return;
+    }
+    if (t.closest('[data-close-changes]')) {
+      this.toggleSidebar(false);
+      this.btn('btn-sidebar').focus();
+      return;
+    }
     const act = t.closest<HTMLElement>('button.act');
     if (act) {
       const key = act.dataset.key!;
@@ -451,7 +642,7 @@ export class App {
     const fold = t.closest<HTMLElement>('[data-fold]');
     if (fold) {
       this.expanded.add(fold.dataset.fold!);
-      this.refresh();
+      this.render();
       return;
     }
     const menu = t.closest<HTMLElement>('[data-menu]');
@@ -545,6 +736,7 @@ export class App {
     this.setDoc(side, doc);
     this.edits[side] = 0;
     this.current = 0;
+    this.userScrolled = false;
     this.expanded.clear();
     this.refresh();
     this.el.scroller.scrollTop = 0;
@@ -611,32 +803,54 @@ export class App {
 
   /* -------------------------------------------------------- rendering */
 
+  /** Compares the documents again (they or the options changed), then shows the result. */
   private refresh(): void {
-    const { a, b } = this;
-    const ready = !!a && !!b;
-    this.el.root.classList.toggle('is-empty', !ready);
-    this.el.empty.hidden = ready;
-    this.el.scroller.hidden = !ready;
-    this.el.ruler.hidden = !ready;
+    this.cmp = this.a && this.b ? compareDocs(this.a, this.b, this.opts) : null;
+    this.render();
+  }
+
+  /** Shows the current comparison (the view changed, the comparison did not). */
+  private render(): void {
+    const cmp = this.cmp;
+    this.el.root.classList.toggle('is-empty', !cmp);
+    this.el.empty.hidden = !!cmp;
+    this.el.scroller.hidden = !cmp;
+    this.el.overview.hidden = !cmp;
+    this.el.changes.hidden = !cmp || !this.sidebar;
     this.renderNotice();
-    if (!ready) {
-      this.cmp = null;
+    if (!cmp) {
       this.el.colheads.innerHTML = '';
       this.el.gridEl.innerHTML = '';
       this.renderEmpty();
       this.renderToolbar();
       return;
     }
-    this.cmp = compareDocs(a!, b!, this.opts);
-    const n = this.cmp.hunks.length;
+    const n = cmp.hunks.length;
     if (this.current >= n) this.current = n - 1;
     if (this.current < 0 && n) this.current = 0;
     this.renderHeads();
     this.grid.setCurrent(-1);
-    this.grid.render({ cmp: this.cmp, changesOnly: this.changesOnly, expanded: this.expanded });
+    // With no changes there is nothing to fold away.
+    this.grid.render({ cmp, changesOnly: this.changesOnly && n > 0, expanded: this.expanded });
     this.grid.setCurrent(this.current);
+    this.overview.setCurrent(this.current);
+    this.overview.invalidate();
     this.renderToolbar();
-    this.scheduleRuler();
+    this.renderChanges();
+    this.placeOverview();
+    this.scheduleFrame();
+  }
+
+  /** Words for documents with no differences, naming what the options leave out. */
+  private sameText(): string {
+    const o = this.opts;
+    const ignored = [
+      o.ignoreFormatting && 'formatting',
+      o.ignoreCase && 'letter case',
+      o.ignoreWhitespace && 'extra spaces',
+      o.normalizePunctuation && 'quote and dash styles',
+    ].filter((x): x is string => !!x);
+    return ignored.length ? `A and B match, ignoring ${listText(ignored)}` : 'A and B are identical';
   }
 
   private renderToolbar(): void {
@@ -644,20 +858,23 @@ export class App {
     const n = cmp?.hunks.length ?? 0;
     const tb = this.el.toolbar;
     tb.classList.toggle('disabled', !cmp);
-    const set = (id: string, disabled: boolean) => {
-      const b = tb.querySelector<HTMLButtonElement>('#' + id);
-      if (b) b.disabled = disabled;
-    };
-    set('btn-prev', n === 0);
-    set('btn-next', n === 0);
-    set('btn-all', n === 0);
-    set('btn-options', !cmp);
-    set('btn-changes', !cmp);
-    set('btn-undo', !this.undoStack.length);
-    set('btn-redo', !this.redoStack.length);
-    this.host.querySelector<HTMLButtonElement>('#btn-swap')!.disabled = !this.a && !this.b;
-    const ch = tb.querySelector<HTMLButtonElement>('#btn-changes')!;
-    ch.setAttribute('aria-pressed', String(this.changesOnly));
+    tb.classList.toggle('same', !!cmp && n === 0);
+    this.disable('btn-all', n === 0);
+    this.disable('btn-options', !cmp);
+    this.disable('btn-changes', n === 0);
+    this.disable('btn-minimap', !cmp);
+    this.disable('btn-lines', !cmp);
+    this.disable('btn-sidebar', !cmp);
+    this.disable('btn-undo', !this.undoStack.length);
+    this.disable('btn-redo', !this.redoStack.length);
+    this.disable('btn-swap', !this.a && !this.b);
+    this.disable('btn-new', !this.a && !this.b);
+    this.press('btn-changes', this.changesOnly && n > 0);
+    this.press('btn-minimap', this.minimap);
+    this.press('btn-lines', this.lines);
+    this.press('btn-contrast', this.lowContrast);
+    this.press('btn-sidebar', this.sidebar && !!cmp);
+    this.updateNav();
     if (!cmp) {
       this.el.counter.textContent = '';
       this.el.stats.innerHTML = '';
@@ -665,15 +882,28 @@ export class App {
     }
     this.el.counter.innerHTML =
       n === 0
-        ? '<span class="same">No differences</span>'
+        ? `${icons.check}<span class="same">No differences</span>`
         : `<span class="c-word">Change </span><b>${this.current + 1}</b><span class="c-of"> of </span><b class="c-n">${n}</b>`;
     const s = cmp.stats;
     this.el.stats.innerHTML =
       n === 0
-        ? `<span class="stat ok">${icons.check}Identical text</span>`
+        ? `<span class="stat ok">${esc(this.sameText())}</span>`
         : `<span class="stat mod" title="Paragraphs that differ">${s.changed.toLocaleString()} changed</span>` +
           `<span class="stat del" title="Paragraphs only in A">${s.removed.toLocaleString()} only in A</span>` +
           `<span class="stat ins" title="Paragraphs only in B">${s.added.toLocaleString()} only in B</span>`;
+  }
+
+  /** Turns the change and page buttons off where they would do nothing. */
+  private updateNav(): void {
+    let state = '1111';
+    if (this.cmp) {
+      const sc = this.el.scroller;
+      const bottom = sc.scrollHeight - sc.clientHeight - 1;
+      state = [this.navTarget(-1) < 0, this.navTarget(1) < 0, sc.scrollTop <= 0, sc.scrollTop >= bottom].map((off) => (off ? '1' : '0')).join('');
+    }
+    if (state === this.navState) return;
+    this.navState = state;
+    ['btn-prev', 'btn-next', 'btn-page-prev', 'btn-page-next'].forEach((id, i) => this.disable(id, state[i] === '1'));
   }
 
   private slotHtml(side: Side, doc: Doc): string {
@@ -728,65 +958,169 @@ export class App {
   }
 
   private renderNotice(): void {
-    const parts: string[] = [];
+    const lines: Array<[key: string, html: string]> = [];
     if (this.sample && this.a && this.b)
-      parts.push(
+      lines.push([
+        'sample',
         `<span><b>Sample drafts.</b> Replace A and B with your own documents, or drop two files anywhere on the page.</span><button type="button" class="btn sm" data-cmd="clear">Use my own documents</button>`,
-      );
+      ]);
     // Notes that apply to both documents are shown once.
     const notesA = this.a?.notes ?? [];
     const notesB = this.b?.notes ?? [];
     for (const n of new Set([...notesA, ...notesB])) {
       const who = notesA.includes(n) && notesB.includes(n) ? 'A and B' : notesA.includes(n) ? 'A' : 'B';
-      parts.push(`<span><b>${who}:</b> ${esc(n)}</span>`);
+      lines.push([`note:${n}`, `<span><b>${who}:</b> ${esc(n)}</span>`]);
     }
-    this.el.notice.hidden = !parts.length;
-    this.el.notice.innerHTML = parts.map((p) => `<div class="notice-line">${p}</div>`).join('');
+    const shown = lines.filter(([key]) => !this.dismissed.has(key));
+    this.el.notice.hidden = !shown.length;
+    this.el.notice.innerHTML = shown
+      .map(
+        ([key, html]) =>
+          `<div class="notice-line"><div class="notice-text">${html}</div><button type="button" class="notice-x btn ghost icon-only" data-dismiss="${esc(key)}" aria-label="Dismiss" data-tip="Dismiss">${icons.close}</button></div>`,
+      )
+      .join('');
   }
 
-  /* ----------------------------------------------------------- ruler */
+  private dismissNotice(key: string): void {
+    this.dismissed.add(key);
+    this.renderNotice();
+    this.el.notice.querySelector<HTMLElement>('[data-dismiss]')?.focus();
+  }
 
-  private scheduleRuler(): void {
-    if (this.rulerFrame) return;
-    this.rulerFrame = requestAnimationFrame(() => {
-      this.rulerFrame = 0;
-      this.drawRuler();
+  /* ------------------------------------------------ overview and list */
+
+  private scheduleFrame(): void {
+    if (this.frame) return;
+    this.frame = requestAnimationFrame(() => {
+      this.frame = 0;
+      if (!this.cmp) return;
+      this.overview.draw();
+      this.updateNav();
     });
   }
 
-  private drawRuler(): void {
-    if (!this.cmp || this.el.ruler.hidden) return;
-    const sc = this.el.scroller;
-    const total = sc.scrollHeight || 1;
-    const view = this.el.rulerView;
-    view.style.top = `${(sc.scrollTop / total) * 100}%`;
-    view.style.height = `${(sc.clientHeight / total) * 100}%`;
-    const key = `${this.cmp.hunks.length}:${total}:${this.current}`;
-    if (this.el.ruler.dataset.key === key) return;
-    this.el.ruler.dataset.key = key;
-    for (const m of Array.from(this.el.ruler.querySelectorAll('.mark'))) m.remove();
-    const frag = document.createDocumentFragment();
-    for (const p of this.grid.hunkPositions()) {
-      const m = document.createElement('div');
-      m.className = `mark m-${p.kind}${p.hunk === this.current ? ' cur' : ''}`;
-      m.style.top = `${p.top * 100}%`;
-      m.style.height = `max(3px, ${p.height * 100}%)`;
-      m.dataset.hunk = String(p.hunk);
-      frag.appendChild(m);
-    }
-    this.el.ruler.appendChild(frag);
+  private placeOverview(): void {
+    if (!this.cmp) return;
+    this.overview.place(this.el.colheads.querySelector('.colhead.gut'), this.el.colheads.offsetHeight + 6);
   }
 
-  private onRulerClick(e: MouseEvent): void {
-    const mark = (e.target as HTMLElement).closest<HTMLElement>('.mark');
-    if (mark) {
-      this.setCurrent(Number(mark.dataset.hunk), true);
-      return;
+  private panelOverlays(): boolean {
+    return window.matchMedia?.(PANEL_OVERLAYS).matches ?? false;
+  }
+
+  private renderChanges(): void {
+    const cmp = this.cmp;
+    if (!this.sidebar || !cmp) return;
+    if (this.listed !== cmp) {
+      this.listed = cmp;
+      const n = cmp.hunks.length;
+      this.el.changesCount.textContent = n ? n.toLocaleString() : '';
+      this.el.changesList.innerHTML = n
+        ? changeListHtml(cmp, this.current)
+        : `<li class="changes-none">${icons.check}<span>${esc(this.sameText())}</span></li>`;
     }
-    const r = this.el.ruler.getBoundingClientRect();
-    const f = (e.clientY - r.top) / r.height;
-    const sc = this.el.scroller;
-    sc.scrollTo({ top: f * sc.scrollHeight - sc.clientHeight / 2, behavior: reducedMotion() ? 'auto' : 'smooth' });
+    this.markCurrentCard(false);
+  }
+
+  /** Highlights the current change's card, and scrolls the list to it. */
+  private markCurrentCard(scroll: boolean): void {
+    if (!this.sidebar || !this.cmp || this.listed !== this.cmp) return;
+    const list = this.el.changesList;
+    const old = list.querySelector('.chg-card.cur');
+    const card = list.querySelector<HTMLElement>(`.chg-card[data-hunk="${this.current}"]`);
+    if (old !== card) {
+      old?.classList.remove('cur');
+      old?.removeAttribute('aria-current');
+      card?.classList.add('cur');
+      card?.setAttribute('aria-current', 'true');
+    }
+    if (!scroll || !card) return;
+    // Scrolled directly: a smooth scroll here would cancel the documents' own in some browsers.
+    const lr = list.getBoundingClientRect();
+    const cr = card.getBoundingClientRect();
+    if (cr.top < lr.top) list.scrollTop += cr.top - lr.top - 8;
+    else if (cr.bottom > lr.bottom) list.scrollTop += cr.bottom - lr.bottom + 8;
+  }
+
+  private goToChange(h: number): void {
+    this.userScrolled = false;
+    this.setCurrent(h, true);
+    // Where the list covers the documents, get it out of the way (keyboard focus goes back to its button).
+    if (!this.panelOverlays()) return;
+    const hadFocus = this.el.changes.contains(document.activeElement);
+    this.toggleSidebar(false);
+    if (hadFocus) this.btn('btn-sidebar').focus({ preventScroll: true });
+  }
+
+  /* ------------------------------------------------------------- view */
+
+  private applyView(): void {
+    const c = this.el.root.classList;
+    c.toggle('with-map', this.minimap);
+    c.toggle('with-lines', this.lines);
+    c.toggle('lowc', this.lowContrast);
+    this.overview.setMinimap(this.minimap);
+  }
+
+  /** Changes a view setting that resizes the gutter, keeping the reader's place. */
+  private changeView(change: () => void): void {
+    change();
+    this.savePrefs();
+    this.grid.keepPlace(() => this.applyView());
+    this.overview.invalidate();
+    this.renderToolbar();
+    this.placeOverview();
+    this.scheduleFrame();
+  }
+
+  private toggleMinimap(): void {
+    if (!this.cmp) return;
+    this.changeView(() => (this.minimap = !this.minimap));
+  }
+
+  private toggleLines(): void {
+    if (!this.cmp) return;
+    this.changeView(() => (this.lines = !this.lines));
+  }
+
+  private toggleLowContrast(): void {
+    this.lowContrast = !this.lowContrast;
+    this.savePrefs();
+    this.applyView();
+    this.overview.invalidate();
+    this.renderToolbar();
+    this.scheduleFrame();
+  }
+
+  private toggleSidebar(open = !this.sidebar): void {
+    if (open === this.sidebar || (open && !this.cmp)) return;
+    this.sidebar = open;
+    this.savePrefs();
+    // Beside the documents, the list narrows them.
+    this.grid.keepPlace(() => {
+      this.el.changes.hidden = !open;
+    });
+    this.renderChanges();
+    this.markCurrentCard(true);
+    this.renderToolbar();
+  }
+
+  private switchTheme(): void {
+    toggleTheme();
+    this.themeChanged();
+  }
+
+  private themeChanged(): void {
+    this.renderThemeButton();
+    this.overview.invalidate();
+    this.scheduleFrame();
+  }
+
+  private renderThemeButton(): void {
+    const dark = currentTheme() === 'dark';
+    const b = this.btn('btn-theme');
+    b.setAttribute('aria-pressed', String(dark));
+    b.dataset.tip = dark ? 'Switch to the light theme' : 'Switch to the dark theme';
   }
 
   /* -------------------------------------------------------- navigation */
@@ -794,32 +1128,61 @@ export class App {
   private setCurrent(h: number, scroll: boolean): void {
     this.current = h;
     this.grid.setCurrent(h);
+    this.overview.setCurrent(h);
+    this.markCurrentCard(true);
     this.renderToolbar();
-    this.el.ruler.dataset.key = '';
-    this.scheduleRuler();
     if (scroll) this.grid.scrollToHunk(h, !reducedMotion());
   }
 
-  private step(delta: number): void {
+  /**
+   * The change N (delta 1) or P (delta -1) goes to, or -1 when there is none.
+   * After the reader scrolled away from the current change, it goes from what
+   * is on screen instead.
+   */
+  private navTarget(delta: 1 | -1): number {
     const n = this.cmp?.hunks.length ?? 0;
-    if (!n) return;
+    if (!n) return -1;
     let base = this.current;
-    // If the reader scrolled away by hand, continue from what is on screen.
-    if (this.userScrolled && !this.hunkVisible(base)) {
-      const inView = this.grid.hunkInView();
-      if (inView >= 0) base = delta > 0 ? inView - 1 : inView;
+    if (this.userScrolled) {
+      const layout = this.grid.layout();
+      const sc = this.el.scroller;
+      const top = sc.scrollTop + layout.head;
+      const bottom = sc.scrollTop + sc.clientHeight;
+      const cur = layout.hunks[this.current];
+      if (!cur || cur.bottom <= top || cur.top >= bottom) {
+        // The first change that ends below the top of the screen (n when all are above it).
+        let lo = 0;
+        let hi = layout.hunks.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (layout.hunks[mid]!.bottom > top) hi = mid;
+          else lo = mid + 1;
+        }
+        const next = lo < layout.hunks.length ? layout.hunks[lo]!.hunk : n;
+        base = delta > 0 ? next - 1 : next;
+      }
     }
-    const next = Math.max(0, Math.min(n - 1, base + delta));
-    this.userScrolled = false;
-    this.setCurrent(next, true);
+    const t = base + delta;
+    return t >= 0 && t < n ? t : -1;
   }
 
-  private hunkVisible(h: number): boolean {
-    const el = this.el.gridEl.querySelector<HTMLElement>(`.row[data-hunk="${h}"]`);
-    if (!el) return false;
-    const r = el.getBoundingClientRect();
-    const s = this.el.scroller.getBoundingClientRect();
-    return r.bottom > s.top && r.top < s.bottom;
+  private step(delta: 1 | -1): void {
+    const t = this.navTarget(delta);
+    if (t < 0) return;
+    this.userScrolled = false;
+    this.setCurrent(t, true);
+  }
+
+  /** Scrolls the documents by a screen, keeping a little of the last one in view. */
+  private page(delta: 1 | -1): void {
+    if (!this.cmp) return;
+    const sc = this.el.scroller;
+    const bottom = sc.scrollHeight - sc.clientHeight - 1;
+    if (delta < 0 ? sc.scrollTop <= 0 : sc.scrollTop >= bottom) return;
+    const amount = Math.max(80, sc.clientHeight - this.el.colheads.offsetHeight - 48);
+    this.userScrolled = true;
+    this.closePop();
+    sc.scrollBy({ top: delta * amount, behavior: reducedMotion() ? 'auto' : 'smooth' });
   }
 
   /* ---------------------------------------------------------- editing */
@@ -893,11 +1256,11 @@ export class App {
   }
 
   private toggleChangesOnly(): void {
-    if (!this.cmp) return;
+    if (!this.cmp?.hunks.length) return;
     this.changesOnly = !this.changesOnly;
     this.expanded.clear();
     this.savePrefs();
-    this.refresh();
+    this.render();
     if (this.current >= 0) this.grid.scrollToHunk(this.current, false);
   }
 
@@ -982,7 +1345,7 @@ export class App {
   }
 
   private openCopyAll(anchor: HTMLElement): void {
-    if (!this.cmp) return;
+    if (!this.cmp?.hunks.length) return;
     const cur = this.current >= 0 && this.current < this.cmp.hunks.length;
     this.openPop(
       anchor,
@@ -999,6 +1362,7 @@ export class App {
   }
 
   private openOptions(anchor: HTMLElement): void {
+    if (!this.cmp) return;
     const o = this.opts;
     const box = (key: keyof CompareOptions, label: string, hint = '') =>
       `<label class="opt"><input type="checkbox" data-opt="${key}"${o[key] ? ' checked' : ''}><span>${label}${hint ? `<small>${hint}</small>` : ''}</span></label>`;
@@ -1261,8 +1625,10 @@ export class App {
         <section>
           <h3>Compare</h3>
           <p>Load two versions of a document as <b>A</b> and <b>B</b>. Paragraphs are lined up side by side. Words only in A are marked in red, words only in B in green; a caret marks where the other side has extra text.</p>
+          <h3>Find your way</h3>
+          <p>The ruler between the columns has a mark for every change: click one to go to it, or drag the frame to scroll. The minimap shows each document in miniature on either side of the ruler. The list of changes names every change with its words; click one to go there. Line numbers count the paragraphs of each document (the lines of a text file).</p>
           <h3>Copy changes</h3>
-          <p>Use the arrows between the columns to copy a paragraph across: <span class="k">${icons.toB}</span> makes B use A’s version, <span class="k">${icons.toA}</span> makes A use B’s version. Click a highlighted word to copy just that edit. Tables can be copied row by row.</p>
+          <p>Use the arrows beside the ruler to copy a paragraph across: <span class="k">${icons.toB}</span> makes B use A’s version, <span class="k">${icons.toA}</span> makes A use B’s version. Click a highlighted word to copy just that edit. Tables can be copied row by row.</p>
           <h3>Get the result</h3>
           <p><b>Export</b> saves a document in its own format first. Word (.docx) and OpenDocument (.odt) files keep their own styles, headers, footers and page setup, with only the copied paragraphs changed. Any document can also be saved as Word, PDF, OpenDocument, RTF, a web page, Markdown or plain text. A PDF is laid out afresh on A4 pages; saving the first one loads the PDF maker, which needs an internet connection.</p>
           <p>For Google Docs, either upload the .docx to Drive and open it with Google Docs, or use <b>Copy formatted text</b> and paste over the document’s contents.</p>
@@ -1273,11 +1639,15 @@ export class App {
           <h3>Keyboard</h3>
           <dl class="keys">
             <dt><kbd>N</kbd> / <kbd>P</kbd></dt><dd>Next / previous change</dd>
+            <dt><kbd>Page Down</kbd> / <kbd>Page Up</kbd></dt><dd>Next / previous page</dd>
             <dt><kbd>Alt</kbd>+<kbd>→</kbd></dt><dd>Use A’s version in B</dd>
             <dt><kbd>Alt</kbd>+<kbd>←</kbd></dt><dd>Use B’s version in A</dd>
             <dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo</dd>
             <dt><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></dt><dd>Redo</dd>
             <dt><kbd>C</kbd></dt><dd>Show changes only</dd>
+            <dt><kbd>S</kbd></dt><dd>List of changes</dd>
+            <dt><kbd>M</kbd></dt><dd>Minimap</dd>
+            <dt><kbd>L</kbd></dt><dd>Line numbers</dd>
             <dt><kbd>?</kbd></dt><dd>This help</dd>
           </dl>
           <h3>What is compared</h3>
