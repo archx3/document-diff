@@ -52,9 +52,13 @@ Compare two versions of a document side by side, see every difference down to th
 - ignore empty paragraphs (on by default);
 - ignore formatting, letter case, extra spaces, or curly versus straight quotes and dashes.
 
-*Changes only* folds unchanged paragraphs away. The other view buttons show the minimap, line numbers in the gutter (paragraph numbers, which for text and code files are their line numbers), the list of changes, and a low contrast mode without borders, where the sheets and the desk share one colour. These are remembered in the browser.
+The toolbar has three parts:
 
-The theme button switches between light and dark. The choice applies to every page and is remembered; picking the system's own theme again goes back to following the system. Notes about the documents (such as a PDF not being editable in place) can be dismissed.
+- **Changes**, on the left: previous and next change, *Changes only* (which folds unchanged paragraphs away), the counter and the totals. Where the toolbar is short of room, the totals show just their numbers and the counter reads "1 / 7".
+- **View**, in the middle: the minimap, line numbers in the gutter (paragraph numbers, which for text and code files are their line numbers), *Compare* options, and *Previous page* / *Next page*.
+- **Editing**, on the right: undo, redo, *Copy changes* and the list of changes.
+
+View settings are remembered in the browser. In the app bar, the low contrast button drops the borders so the sheets and the desk share one colour, and the theme button switches between light and dark. The theme applies to every page and is remembered; picking the system's own theme again goes back to following the system. Notes about the documents (such as a PDF not being editable in place) can be dismissed.
 
 ### Keyboard
 

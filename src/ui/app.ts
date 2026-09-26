@@ -130,6 +130,13 @@ function tool(id: string, icon: string, label: string, o: ToolOptions = {}): str
   return `<button ${attrs}>${icon}${o.menu ? icons.caret : ''}</button>`;
 }
 
+/** A text button: its words are its name, and the tooltip says more. */
+function textTool(id: string, text: string, o: Pick<ToolOptions, 'kbd' | 'keys' | 'tip'> = {}): string {
+  let attrs = `type="button" class="btn ghost text-btn" id="${id}" data-tip="${esc(o.tip ?? text)}"`;
+  if (o.kbd) attrs += ` data-kbd="${esc(o.kbd)}" aria-keyshortcuts="${esc(o.keys ?? o.kbd)}"`;
+  return `<button ${attrs}>${esc(text)}</button>`;
+}
+
 export interface AppOptions {
   /** Documents to compare straight away. */
   docs?: { a: Doc; b: Doc | null };
@@ -160,6 +167,7 @@ export class App {
   private el!: {
     root: HTMLElement;
     toolbar: HTMLElement;
+    toolLeft: HTMLElement;
     counter: HTMLElement;
     stats: HTMLElement;
     notice: HTMLElement;
@@ -232,33 +240,40 @@ export class App {
     <div class="appbar-actions">
       ${tool('btn-swap', icons.swap, 'Swap A and B', { ghost: true })}
       ${tool('btn-new', icons.newDoc, 'New comparison', { ghost: true, tip: 'New comparison: start again with two documents' })}
+      ${tool('btn-contrast', icons.contrast, 'Low contrast', { ghost: true, toggle: true, tip: 'Low contrast: no borders, one background' })}
       ${tool('btn-theme', themeIcon, 'Dark theme', { ghost: true, cls: 'theme-btn', tip: 'Switch to the dark theme', attrs: 'aria-pressed="false"' })}
       ${tool('btn-help', icons.help, 'Help and keyboard shortcuts', { ghost: true, kbd: '?' })}
     </div>
   </header>
   <div class="toolbar" id="toolbar" role="toolbar" aria-label="Comparison tools">
-    <div class="tgroup nav">
-      ${tool('btn-page-prev', icons.pageUp, 'Previous page', { kbd: 'Page Up', keys: 'PageUp' })}
-      ${tool('btn-prev', icons.up, 'Previous change', { kbd: 'P' })}
-      ${tool('btn-next', icons.down, 'Next change', { kbd: 'N' })}
-      ${tool('btn-page-next', icons.pageDown, 'Next page', { kbd: 'Page Down', keys: 'PageDown' })}
+    <div class="tcol left" role="group" aria-label="Changes">
+      <div class="tgroup nav">
+        ${tool('btn-prev', icons.up, 'Previous change', { kbd: 'P' })}
+        ${tool('btn-next', icons.down, 'Next change', { kbd: 'N' })}
+        ${tool('btn-changes', icons.fold, 'Changes only', { toggle: true, kbd: 'C', tip: 'Changes only: fold unchanged paragraphs' })}
+      </div>
       <span class="counter" id="counter" aria-live="polite"></span>
+      <div class="stats" id="stats"></div>
     </div>
-    <div class="tgroup stats" id="stats"></div>
-    <div class="tgroup view">
-      ${tool('btn-changes', icons.fold, 'Changes only', { toggle: true, kbd: 'C', tip: 'Changes only: fold unchanged paragraphs' })}
+    <div class="tcol middle" role="group" aria-label="View">
       ${tool('btn-minimap', icons.minimap, 'Minimap', { toggle: true, kbd: 'M', tip: 'Minimap of each document beside the ruler' })}
       ${tool('btn-lines', icons.lineNumbers, 'Line numbers', { toggle: true, kbd: 'L', tip: 'Line numbers in the gutter' })}
-      ${tool('btn-contrast', icons.contrast, 'Low contrast', { toggle: true, tip: 'Low contrast: no borders, one background' })}
       ${tool('btn-options', icons.sliders, 'Compare options', { menu: true, tip: 'Compare options: what counts as a difference' })}
+      <div class="tsep" role="separator" aria-orientation="vertical"></div>
+      <div class="tgroup pages">
+        ${textTool('btn-page-prev', 'Previous page', { kbd: 'Page Up', keys: 'PageUp', tip: 'Scroll up a screen' })}
+        ${textTool('btn-page-next', 'Next page', { kbd: 'Page Down', keys: 'PageDown', tip: 'Scroll down a screen' })}
+      </div>
     </div>
-    <div class="tgroup edit">
-      ${tool('btn-undo', icons.undo, 'Undo', { kbd: 'Ctrl+Z', keys: 'Control+Z Meta+Z' })}
-      ${tool('btn-redo', icons.redo, 'Redo', { kbd: 'Ctrl+Shift+Z', keys: 'Control+Shift+Z Meta+Shift+Z' })}
-      ${tool('btn-all', icons.merge, 'Copy changes', { menu: true, tip: 'Copy this change or every change across' })}
-    </div>
-    <div class="tgroup panel">
-      ${tool('btn-sidebar', icons.sidebar, 'List of changes', { toggle: true, kbd: 'S', attrs: 'aria-controls="changes"' })}
+    <div class="tcol right">
+      <div class="tgroup edit" role="group" aria-label="Edit">
+        ${tool('btn-undo', icons.undo, 'Undo', { kbd: 'Ctrl+Z', keys: 'Control+Z Meta+Z' })}
+        ${tool('btn-redo', icons.redo, 'Redo', { kbd: 'Ctrl+Shift+Z', keys: 'Control+Shift+Z Meta+Shift+Z' })}
+        ${tool('btn-all', icons.merge, 'Copy changes', { menu: true, tip: 'Copy this change or every change across' })}
+      </div>
+      <div class="tgroup panel">
+        ${tool('btn-sidebar', icons.sidebar, 'List of changes', { toggle: true, kbd: 'S', attrs: 'aria-controls="changes"' })}
+      </div>
     </div>
   </div>
   <div class="notice" id="notice" hidden></div>
@@ -296,6 +311,7 @@ export class App {
     this.el = {
       root: this.host.querySelector('.app')!,
       toolbar: $('toolbar'),
+      toolLeft: this.host.querySelector('.tcol.left')!,
       counter: $('counter'),
       stats: $('stats'),
       notice: $('notice'),
@@ -439,14 +455,21 @@ export class App {
       this.scheduleFrame();
     });
     if (typeof ResizeObserver === 'function') {
-      // The overview follows the gutter when the columns or their heads change size.
-      this.resizeObserver = new ResizeObserver(() => {
+      // The overview follows the gutter when the columns or their heads change size, and the
+      // toolbar's counter and stats fit themselves to their column.
+      this.resizeObserver = new ResizeObserver((entries) => {
+        if (entries.some((e) => e.target === this.el.toolLeft)) this.fitToolbar();
         this.placeOverview();
         this.scheduleFrame();
       });
       this.resizeObserver.observe(this.el.scroller);
       this.resizeObserver.observe(this.el.colheads);
+      this.resizeObserver.observe(this.el.toolLeft);
     }
+    // Text is measured again once the web fonts are in.
+    void document.fonts?.ready.then(() => {
+      if (!this.listeners.signal.aborted) this.fitToolbar();
+    });
     this.stopThemeWatch = onSystemThemeChange(() => this.themeChanged());
     new Tooltips(this.el.root, this.listeners.signal);
     this.renderThemeButton();
@@ -885,12 +908,30 @@ export class App {
         ? `${icons.check}<span class="same">No differences</span>`
         : `<span class="c-word">Change </span><b>${this.current + 1}</b><span class="c-of"> of </span><b class="c-n">${n}</b>`;
     const s = cmp.stats;
+    // Where the toolbar is short of room, only the numbers show; the tooltip names them.
+    const stat = (kind: string, count: number, words: string, tip: string) =>
+      `<span class="stat ${kind}" data-tip="${tip}">${count.toLocaleString()}<span class="stat-words"> ${words}</span></span>`;
     this.el.stats.innerHTML =
       n === 0
         ? `<span class="stat ok">${esc(this.sameText())}</span>`
-        : `<span class="stat mod" title="Paragraphs that differ">${s.changed.toLocaleString()} changed</span>` +
-          `<span class="stat del" title="Paragraphs only in A">${s.removed.toLocaleString()} only in A</span>` +
-          `<span class="stat ins" title="Paragraphs only in B">${s.added.toLocaleString()} only in B</span>`;
+        : stat('mod', s.changed, 'changed', 'Paragraphs that differ') +
+          stat('del', s.removed, 'only in A', 'Paragraphs only in A') +
+          stat('ins', s.added, 'only in B', 'Paragraphs only in B');
+    this.fitToolbar();
+  }
+
+  /**
+   * Shortens the toolbar's counter and stats only as far as their column needs: first the stats
+   * lose their words, then the counter reads "1 / 7". As a last resort they wrap.
+   */
+  private fitToolbar(): void {
+    const col = this.el.toolLeft;
+    const fits = () => col.scrollWidth <= col.clientWidth + 1;
+    col.classList.remove('short-stats', 'short-count', 'wrap');
+    for (const level of ['short-stats', 'short-count', 'wrap']) {
+      if (fits()) return;
+      col.classList.add(level);
+    }
   }
 
   /** Turns the change and page buttons off where they would do nothing. */

@@ -219,15 +219,47 @@ test('notices can be dismissed', async ({ page }) => {
   await expect(page.locator('#notice')).toBeHidden();
 });
 
-test('the tools are icon buttons with names and tooltips', async ({ page }) => {
-  for (const b of await page.locator('.appbar button, .toolbar button').all()) {
+test('the tools are icon buttons with names and tooltips, the page buttons text', async ({ page }) => {
+  for (const b of await page.locator('.appbar button, .toolbar button:not(.text-btn)').all()) {
     expect(await b.getAttribute('aria-label')).toBeTruthy();
     expect((await b.textContent())?.trim()).toBe('');
   }
+  await expect(page.locator('.toolbar .text-btn')).toHaveText(['Previous page', 'Next page']);
   await page.locator('#btn-next').hover();
   await expect(page.locator('.tip')).toBeVisible();
   await expect(page.locator('.tip')).toContainText('Next change');
   await expect(page.locator('.tip kbd')).toHaveText('N');
+});
+
+test('the toolbar has the changes on the left, the view in the middle and editing on the right', async ({ page }) => {
+  const inColumn = async (column: string, ids: string[]) => {
+    for (const id of ids) await expect(page.locator(`.toolbar .tcol.${column} #${id}`), id).toHaveCount(1);
+  };
+  await inColumn('left', ['btn-prev', 'btn-next', 'btn-changes', 'counter', 'stats']);
+  await inColumn('middle', ['btn-minimap', 'btn-lines', 'btn-options', 'btn-page-prev', 'btn-page-next']);
+  await inColumn('right', ['btn-undo', 'btn-redo', 'btn-all', 'btn-sidebar']);
+  await expect(page.locator('.appbar #btn-contrast')).toHaveCount(1);
+  // The divider comes before the page buttons.
+  await expect(page.locator('.tcol.middle > .tsep + .tgroup.pages')).toHaveCount(1);
+
+  const box = async (s: string) => (await page.locator(s).boundingBox())!;
+  const bar = await box('#toolbar');
+  const [left, middle, right] = [await box('.tcol.left'), await box('.tcol.middle'), await box('.tcol.right')];
+  expect(Math.abs(middle.x + middle.width / 2 - (bar.x + bar.width / 2))).toBeLessThan(2);
+  expect(left.x + left.width).toBeLessThanOrEqual(middle.x);
+  expect(right.x).toBeGreaterThanOrEqual(middle.x + middle.width);
+  expect(Math.abs(right.x + right.width - (bar.x + bar.width - 16))).toBeLessThan(2);
+  expect(bar.height).toBeLessThan(60);
+  await expect(page.locator('.tcol.left')).toHaveClass('tcol left');
+
+  // Narrower, the stats and counter say less rather than crowd the middle.
+  await page.setViewportSize({ width: 1024, height: 800 });
+  await expect(page.locator('.tcol.left')).toHaveClass(/short-stats/);
+  await expect(page.locator('.stat-words').first()).toBeHidden();
+  await expect(page.locator('#stats')).toContainText('12 changed');
+  expect((await box('#toolbar')).height).toBeLessThan(60);
+  const narrow = [await box('#toolbar'), await box('.tcol.middle')];
+  expect(Math.abs(narrow[1]!.x + narrow[1]!.width / 2 - (narrow[0]!.x + narrow[0]!.width / 2))).toBeLessThan(2);
 });
 
 test('the theme button switches between light and dark', async ({ page }) => {

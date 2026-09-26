@@ -517,17 +517,22 @@ a.brand-word {
 
 /* ------------------------------------------------------------ toolbar */
 
+/* Three columns: the changes on the left, the view in the middle (centred on the toolbar) and
+   editing on the right. */
 .toolbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  grid-template-areas: 'left middle right';
   align-items: center;
-  gap: 8px 18px;
+  gap: 8px 20px;
   padding: 8px var(--pad);
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
 
-.toolbar.disabled .tgroup:not(.edit) {
+.toolbar.disabled .tcol.left,
+.toolbar.disabled .tcol.middle,
+.toolbar.disabled .tgroup.panel {
   visibility: hidden;
 }
 
@@ -535,6 +540,67 @@ a.brand-word {
 .toolbar.same {
   background: var(--ok-tint);
   border-bottom-color: var(--ok-line);
+}
+
+.tcol {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+/* The left column takes its share of the toolbar, whatever its content; the app shortens the
+   stats, then the counter, when they don't fit, and lets them wrap as a last resort. */
+.tcol.left {
+  grid-area: left;
+  gap: 6px 12px;
+}
+
+.tcol.left > * {
+  flex: none;
+}
+
+.tcol.left.wrap {
+  flex-wrap: wrap;
+}
+
+/* Stats as just their numbers (their tooltips name them). */
+.tcol.left.short-stats .stat-words {
+  display: none;
+}
+
+/* The counter as "1 / 7". */
+.tcol.left.short-count .counter {
+  min-width: 0;
+}
+
+.tcol.left.short-count .c-word,
+.tcol.left.short-count .c-of {
+  display: none;
+}
+
+.tcol.left.short-count .c-n::before {
+  content: '/';
+  padding: 0 3px;
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+.tcol.middle {
+  grid-area: middle;
+  gap: 6px;
+}
+
+.tcol.right {
+  grid-area: right;
+  justify-self: end;
+  gap: 18px;
+}
+
+.tsep {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--line);
 }
 
 .tgroup {
@@ -547,8 +613,12 @@ a.brand-word {
   gap: 4px;
 }
 
-.tgroup.edit {
-  margin-left: auto;
+.tgroup.pages {
+  gap: 2px;
+}
+
+.btn.text-btn {
+  padding: 0 10px;
 }
 
 .counter {
@@ -577,22 +647,24 @@ a.brand-word {
 }
 
 .stats {
+  display: flex;
+  align-items: center;
   gap: 14px;
 }
 
 .stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   font-size: 12.5px;
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .stat::before {
   content: '';
+  display: inline-block;
   width: 9px;
   height: 9px;
+  margin-right: 6px;
   border-radius: 2px;
 }
 
@@ -2264,6 +2336,21 @@ ins.chg .obj-img {
   }
 }
 
+/* No room for three columns in a row: the changes and editing share the first row, and the view
+   is centred on the second. */
+@media (max-width: 1000px) {
+  .toolbar {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'left right'
+      'middle middle';
+  }
+
+  .tcol.middle {
+    justify-self: center;
+  }
+}
+
 @media (max-width: 860px) {
   .app {
     --act-w: 26px;
@@ -2410,12 +2497,15 @@ ins.chg .obj-img {
     min-height: 26px;
   }
 
+  /* The columns stack: the changes, then the view, then editing. */
   .toolbar {
-    gap: 8px 6px;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'left' 'middle' 'right';
+    gap: 8px;
   }
 
-  .tgroup.edit {
-    margin-left: auto;
+  .tcol.middle {
+    justify-self: start;
   }
 
   .tgroup {
@@ -2429,28 +2519,6 @@ ins.chg .obj-img {
   .btn.icon-menu {
     width: 32px;
     padding: 0;
-  }
-
-  .stats {
-    order: 5;
-    width: 100%;
-    gap: 12px;
-  }
-
-  .counter {
-    min-width: 0;
-  }
-
-  .c-word,
-  .c-of {
-    display: none;
-  }
-
-  .c-n::before {
-    content: '/';
-    padding: 0 3px;
-    color: var(--ink-3);
-    font-weight: 400;
   }
 
   .notice {
