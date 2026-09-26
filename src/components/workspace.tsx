@@ -1,36 +1,33 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { Doc } from '../core/model';
 import { takeDocs } from '../lib/handoff';
-import { App } from '../ui/app';
+import { CompareApp } from '../ui/app';
 
 const NEW_COMPARISON = '/compare/new/';
 
+type Start = { docs: { a: Doc; b: Doc } | null };
+
 /**
- * The comparison workspace. The app in src/ui builds and runs its own DOM inside this element.
- * With `sample` it shows the sample drafts. Otherwise it shows the documents handed over by the
- * page that chose them; opened without any (typed in, or reloaded), it sends the reader there.
+ * The comparison workspace. With `sample` it shows the sample drafts.
+ * Otherwise it shows the documents handed over by the page that chose them;
+ * opened without any (typed in, or reloaded), it sends the reader there.
  */
 export function Workspace({ sample = false }: { sample?: boolean }) {
-  const host = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  // Taken once and kept: in development React mounts twice, and both mounts must show the same documents.
-  const docs = useRef<ReturnType<typeof takeDocs> | undefined>(undefined);
+  // Taken once and kept: in development React runs effects twice, and both runs must see the same documents.
+  const taken = useRef<Start | null>(null);
+  const [start, setStart] = useState<Start | null>(null);
 
   useEffect(() => {
-    if (!sample && docs.current === undefined) docs.current = takeDocs();
-    if (!sample && !docs.current) {
-      router.replace(NEW_COMPARISON);
-      return;
-    }
-    const app = new App(host.current!, {
-      docs: docs.current ?? undefined,
-      sample,
-      home: `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/`,
-    });
-    return () => app.destroy();
+    taken.current ??= { docs: sample ? null : takeDocs() };
+    if (!sample && !taken.current.docs) router.replace(NEW_COMPARISON);
+    else setStart(taken.current);
   }, [router, sample]);
 
-  return <div id="app" ref={host} />;
+  return (
+    <div id="app">{start && <CompareApp docs={start.docs ?? undefined} sample={sample} home={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/`} />}</div>
+  );
 }

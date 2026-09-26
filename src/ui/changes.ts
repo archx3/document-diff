@@ -1,8 +1,8 @@
 /**
- * The list of changes beside the comparison: one card per change (the same
- * changes N and P step through), saying what kind of change it is, how many
- * words are only in A and only in B, and showing the words themselves with a
- * little of the text around them.
+ * What the list of changes says about each change (the same changes N and P
+ * step through): what kind of change it is, how many words are only in A and
+ * only in B, and the words themselves with a little of the text around them.
+ * The list itself is changes-panel.tsx.
  */
 import type { Comparison, Row } from '../core/compare';
 import { cellDiff, flattenBlocks, inlineDiff, propsChanged } from '../core/compare';
@@ -11,7 +11,6 @@ import { fullRange } from '../core/inline';
 import type { Block, InlineObject, Span, TableBlock, TableRow } from '../core/model';
 import { describeProps } from '../core/model';
 import type { Tokenized } from '../core/tokens';
-import { esc } from './render';
 
 export type ChangeKind = 'mod' | 'del' | 'ins' | 'fmt' | 'table';
 
@@ -20,17 +19,29 @@ export interface ChangeSummary {
   /** Words only in A, and only in B. */
   minus: number;
   plus: number;
-  /** The first few edits, as HTML. */
+  /** The first few edits. */
   edits: Edit[];
   /** Edits not shown. */
   more: number;
 }
 
+/** One side of an edit: the words that differ, marked, with a little of the text around them. */
+export interface Excerpt {
+  /** del for words only in A, ins for words only in B, fmt for the same words formatted differently. */
+  mark: 'del' | 'ins' | 'fmt';
+  /** Text before and after the marked words, with an ellipsis where the paragraph goes on. */
+  before: string;
+  text: string;
+  after: string;
+  /** The whole paragraph, which is empty. */
+  empty?: boolean;
+}
+
 export interface Edit {
   /** A's side of the edit, with the words only in A marked. */
-  a?: string;
+  a?: Excerpt;
   /** B's side, with the words only in B marked. */
-  b?: string;
+  b?: Excerpt;
   /** What changed when the words did not (formatting, paragraph style). */
   note?: string;
 }
@@ -128,15 +139,8 @@ function tokensText(spans: readonly Span[], t: Tokenized, from: number, to: numb
   return s;
 }
 
-type Mark = 'del' | 'ins' | 'fmt';
-
-function marked(text: string, mark: Mark): string {
-  const inner = text ? esc(clipEnd(text, MAX_TEXT)) : '<i>spaces</i>';
-  return mark === 'fmt' ? `<mark class="fmt">${inner}</mark>` : `<${mark}>${inner}</${mark}>`;
-}
-
 /** One side of a word-level edit, with a few words of the text around it. */
-function excerpt(spans: readonly Span[], t: Tokenized, c0: number, c1: number, mark: Mark): string {
+function excerpt(spans: readonly Span[], t: Tokenized, c0: number, c1: number, mark: Excerpt['mark']): Excerpt {
   const [f0, f1] = fullRange(t, c0, c1);
   let s = f0;
   for (let words = 0; s > 0; s--) {
@@ -158,7 +162,7 @@ function excerpt(spans: readonly Span[], t: Tokenized, c0: number, c1: number, m
   after = clipEnd(after.trimEnd(), MAX_CONTEXT);
   const lead = s > 0 && !before.startsWith('…') ? '…' : '';
   const tail = e < t.tokens.length && !after.endsWith('…') ? '…' : '';
-  return `${lead}${esc(before)}${marked(text, mark)}${esc(after)}${tail}`;
+  return { mark, before: lead + before, text: clipEnd(text, MAX_TEXT), after: after + tail };
 }
 
 /** Collects a change's edits, keeping the first few and counting the rest. */
@@ -171,7 +175,7 @@ class Edits {
   readonly shown: Edit[] = [];
   total = 0;
 
-  /** Whether another edit would still be shown (so its HTML is worth building). */
+  /** Whether another edit would still be shown (so its excerpt is worth building). */
   get room(): boolean {
     return this.shown.length < MAX_EDITS;
   }
@@ -207,8 +211,8 @@ class Edits {
     this.text = true;
     if (side === 'a') this.minus += countWords(line);
     else this.plus += countWords(line);
-    const html = line ? marked(line, side === 'a' ? 'del' : 'ins') : '<i>An empty paragraph</i>';
-    this.add(() => (side === 'a' ? { a: html } : { b: html }));
+    const x: Excerpt = { mark: side === 'a' ? 'del' : 'ins', before: '', text: clipEnd(line, MAX_TEXT), after: '', empty: !line };
+    this.add(() => (side === 'a' ? { a: x } : { b: x }));
   }
 }
 
@@ -266,31 +270,4 @@ export function summarizeChange(cmp: Comparison, index: number): ChangeSummary {
   const tables = rows.every((r) => r.kind === 'table' && !(r.l as TableBlock).fragment);
   const kind: ChangeKind = only('del') ? 'del' : only('ins') ? 'ins' : tables ? 'table' : !acc.text && acc.fmt ? 'fmt' : 'mod';
   return { kind, minus: acc.minus, plus: acc.plus, edits: acc.shown, more: acc.total - acc.shown.length };
-}
-
-function plural(n: number, one: string, many = `${one}s`): string {
-  return `${n.toLocaleString()} ${n === 1 ? one : many}`;
-}
-
-function cardHtml(index: number, s: ChangeSummary, current: boolean): string {
-  const counts: string[] = [];
-  if (s.minus) counts.push(`<span class="minus"><span class="vh">${plural(s.minus, 'word')} only in A,</span><span aria-hidden="true">−${s.minus.toLocaleString()}</span></span>`);
-  if (s.plus) counts.push(`<span class="plus"><span class="vh">${plural(s.plus, 'word')} only in B,</span><span aria-hidden="true">+${s.plus.toLocaleString()}</span></span>`);
-  let body = '';
-  for (const e of s.edits) {
-    if (e.a) body += `<span class="chg-line a">${e.a}</span>`;
-    if (e.b) body += `<span class="chg-line b">${e.b}</span>`;
-    if (e.note) body += `<span class="chg-note">${esc(e.note)}</span>`;
-  }
-  if (s.more) body += `<span class="chg-more">and ${plural(s.more, 'more edit')}</span>`;
-  const cur = current ? ' cur' : '';
-  const aria = current ? ' aria-current="true"' : '';
-  return `<li><button type="button" class="chg-card k-${s.kind}${cur}"${aria} data-hunk="${index}"><span class="chg-head"><span class="chg-n">${index + 1}.</span><span class="chg-kind">${KIND_LABEL[s.kind]}</span>${counts.length ? `<span class="chg-counts">${counts.join('')}</span>` : ''}</span>${body}</button></li>`;
-}
-
-/** The cards for every change in the comparison. */
-export function changeListHtml(cmp: Comparison, current: number): string {
-  let html = '';
-  for (let i = 0; i < cmp.hunks.length; i++) html += cardHtml(i, summarizeChange(cmp, i), i === current);
-  return html;
 }

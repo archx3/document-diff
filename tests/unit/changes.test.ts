@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { compareDocs } from '../../src/core/compare';
 import { DEFAULT_OPTIONS } from '../../src/core/tokens';
 import { readMarkdown, readText } from '../../src/formats/text/read';
-import { changeListHtml, summarizeChange } from '../../src/ui/changes';
+import { summarizeChange } from '../../src/ui/changes';
 
 const A = `# Plan
 
@@ -51,33 +51,23 @@ describe('list of changes', () => {
 
   it('shows the changed words with a few words around them', () => {
     const [edit] = summarizeChange(cmp, 0).edits;
-    expect(edit!.a).toBe('We launch on <del>12</del> May.');
-    expect(edit!.b).toBe('We launch on <ins>19</ins> May.');
-    expect(summarizeChange(cmp, 1).edits[0]!.a).toBe('<del>Late payments accrue interest.</del>');
-    expect(summarizeChange(cmp, 2).edits[0]).toEqual({ b: '<ins>A new paragraph appears here.</ins>' });
+    expect(edit!.a).toEqual({ mark: 'del', before: 'We launch on ', text: '12', after: ' May.' });
+    expect(edit!.b).toEqual({ mark: 'ins', before: 'We launch on ', text: '19', after: ' May.' });
+    expect(summarizeChange(cmp, 1).edits[0]!.a).toEqual({ mark: 'del', before: '', text: 'Late payments accrue interest.', after: '', empty: false });
+    expect(summarizeChange(cmp, 2).edits[0]).toEqual({ b: { mark: 'ins', before: '', text: 'A new paragraph appears here.', after: '', empty: false } });
     const fmt = summarizeChange(cmp, 3).edits[0]!;
-    expect(fmt.a).toContain('<mark class="fmt">fee</mark>');
+    expect(fmt.a).toMatchObject({ mark: 'fmt', text: 'fee' });
     expect(fmt.note).toBe('Same words, different formatting');
   });
 
-  it('builds a card for every change, marking the current one', () => {
-    const html = changeListHtml(cmp, 2);
-    expect(html.match(/class="chg-card/g)).toHaveLength(4);
-    expect(html).toContain('data-hunk="2"');
-    expect(html.match(/aria-current="true"/g)).toHaveLength(1);
-    expect(html).toMatch(/class="chg-card k-ins cur" aria-current="true" data-hunk="2"/);
-    expect(html).toContain('Only in A');
-    expect(html).toContain('−4');
-  });
-
-  it('escapes document text and shortens long stretches', () => {
+  it('shortens long stretches of text and names empty paragraphs', () => {
     const long = 'word '.repeat(200).trim();
-    const c = compareDocs(readText('alpha\n<b>bold</b> & more\nomega\n', 'a.txt'), readText(`alpha\nomega\n${long}\n`, 'b.txt'), DEFAULT_OPTIONS);
-    const html = changeListHtml(c, 0);
-    expect(html).toContain('&lt;b&gt;bold&lt;/b&gt; &amp; more');
-    expect(html).not.toContain('<b>bold');
+    const opts = { ...DEFAULT_OPTIONS, ignoreEmpty: false };
+    const c = compareDocs(readText('alpha\nomega\n', 'a.txt'), readText(`alpha\n\nomega\n${long}\n`, 'b.txt'), opts);
+    expect(c.hunks).toHaveLength(2);
+    expect(summarizeChange(c, 0).edits[0]!.b).toMatchObject({ mark: 'ins', empty: true });
     const added = summarizeChange(c, 1).edits[0]!.b!;
-    expect(added.length).toBeLessThan(260);
-    expect(added).toMatch(/…<\/ins>$/);
+    expect(added.text.length).toBeLessThan(200);
+    expect(added.text).toMatch(/…$/);
   });
 });
