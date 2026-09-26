@@ -165,8 +165,12 @@ export function HelpDialog() {
         <section>
           <h3>Compare</h3>
           <p>
-            Load two versions of a document as <b>A</b> and <b>B</b>. Paragraphs are lined up side by side. Words only in A are marked in red, words only in B in green; a caret marks
-            where the other side has extra text.
+            Load two versions of a document as <b>A</b> and <b>B</b>. Words only in A are marked in red, words only in B in green; a caret marks where the other side has extra text.
+          </p>
+          <p>
+            <b>Side by side</b> shows each document in its own column. With <b>connection bands</b> on, each runs on unbroken and the columns slide against each other as you scroll,
+            so what is level with the middle of the screen matches; a band joins each change to the other side. With them off, the paragraphs are lined up in rows, with a gap where
+            one side has nothing. <b>Unified</b> shows one column, with A’s version above B’s wherever they differ.
           </p>
           <h3>Find your way</h3>
           <p>
@@ -176,13 +180,13 @@ export function HelpDialog() {
           </p>
           <h3>Copy changes</h3>
           <p>
-            Use the arrows beside the ruler to copy a paragraph across:{' '}
+            Use the arrows beside the ruler to copy a paragraph (with connection bands, a whole change) across:{' '}
             <span className="k">
-              <Ico name="toB" />
+              <Ico name="chevronsRight" />
             </span>{' '}
             makes B use A’s version,{' '}
             <span className="k">
-              <Ico name="toA" />
+              <Ico name="chevronsLeft" />
             </span>{' '}
             makes A use B’s version. Click a highlighted word to copy just that edit. Tables can be copied row by row.
           </p>
@@ -212,6 +216,8 @@ export function HelpDialog() {
             <Key keys={['Ctrl', 'Shift', 'Z']} plus what="Redo" />
             <Key keys={['C']} what="Show changes only" />
             <Key keys={['S']} what="List of changes" />
+            <Key keys={['V']} what="Side by side / unified" />
+            <Key keys={['B']} what="Connection bands" />
             <Key keys={['M']} what="Minimap" />
             <Key keys={['L']} what="Line numbers" />
             <Key keys={['?']} what="This help" />

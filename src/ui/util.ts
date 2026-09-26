@@ -3,6 +3,9 @@ import type { CompareOptions } from '../core/tokens';
 
 export type Side = 'a' | 'b';
 
+/** The documents side by side, or in one column with A above B where they differ. */
+export type View = 'split' | 'unified';
+
 export const SIDE_NAME: Record<Side, string> = { a: 'A', b: 'B' };
 
 export const other = (s: Side): Side => (s === 'a' ? 'b' : 'a');

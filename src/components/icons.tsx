@@ -26,6 +26,22 @@ const PATHS = {
   down: '<path d="M4 6l4 4 4-4"/>',
   chevron: '<path d="M4.5 6.5 8 10l3.5-3.5"/>',
   fold: '<path d="M4 6l4-3 4 3M4 10l4 3 4-3"/>',
+  /** Changes only: two corners closing in. */
+  changesOnly: '<path d="M9.5 3v3.5H13M3 9.5h3.5V13"/>',
+  /** Side by side: a page split down the middle. */
+  sideBySide: '<rect x="2.25" y="2.25" width="11.5" height="11.5" rx="2.5"/><path d="M8 2.25v11.5"/>',
+  /** Unified: one page. */
+  unified: '<rect x="2.25" y="2.25" width="11.5" height="11.5" rx="2.5"/>',
+  /** Connection bands: two edges joined by a band. */
+  bands:
+    '<path d="M2 2.5v11M14 2.5v11"/><path d="M2 4.5C8 4.5 8 8.5 14 8.5V11.5C8 11.5 8 7.5 2 7.5z" fill="currentColor" fill-opacity=".3" stroke="none"/><path d="M2 4.5C8 4.5 8 8.5 14 8.5M2 7.5C8 7.5 8 11.5 14 11.5"/>',
+  info: '<circle cx="8" cy="8" r="6"/><path d="M8 7.3v3.7M8 4.9v.1"/>',
+  /** Copy towards A (and towards B, mirrored). */
+  chevronsLeft: '<path d="M7.33 4.67 4 8l3.33 3.33M12 4.67 8.67 8 12 11.33"/>',
+  chevronsRight: '<path d="M8.67 4.67 12 8l-3.33 3.33M4 4.67 7.33 8 4 11.33"/>',
+  /** Connection bands: two points joined, a divider, one point on its own. */
+  connector:
+    '<circle cx="3.33" cy="4" r="2"/><circle cx="3.33" cy="12" r="2"/><path d="M3.33 6v4M8 2v12"/><circle cx="12.67" cy="4" r="2"/><path d="M12.67 6a6.93 6.93 0 0 1-1.93 4.47"/>',
   undo: '<path d="M5.5 3.5 2.5 6.5l3 3"/><path d="M2.5 6.5H10a3.5 3.5 0 0 1 0 7H7"/>',
   redo: '<path d="M10.5 3.5l3 3-3 3"/><path d="M13.5 6.5H6a3.5 3.5 0 0 0 0 7h3"/>',
   sliders: '<path d="M3 4.5h6M12 4.5h1M3 11.5h1M7 11.5h6"/><circle cx="10.5" cy="4.5" r="1.5"/><circle cx="5.5" cy="11.5" r="1.5"/>',

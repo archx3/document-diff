@@ -9,8 +9,19 @@ import { libreOfficeText as convert } from '../soffice';
 const OUT = 'tests/fixtures/out';
 mkdirSync(OUT, { recursive: true });
 
-const counter = (page: Page) => page.locator('#counter');
+/** What the counter says in full ("Change 1 of 7"); it shows "1/7". */
+const counter = (page: Page) => page.locator('#counter .vh');
 const rowByText = (page: Page, text: string) => page.locator('.row', { hasText: text }).first();
+
+/** Opens the sample with these view settings (unset ones as a new visitor has them). */
+async function openSample(page: Page, prefs?: Record<string, unknown>) {
+  await page.addInitScript((p) => {
+    localStorage.clear();
+    if (p) localStorage.setItem('collate.prefs.v1', JSON.stringify(p));
+  }, prefs ?? null);
+  await page.goto('/compare/sample/');
+  await expect(counter(page)).toContainText('of');
+}
 
 async function loadFile(page: Page, side: 'a' | 'b', path: string) {
   // Either a "Choose file" button (opens the picker directly) or a "Replace" menu.
@@ -25,10 +36,10 @@ async function loadFile(page: Page, side: 'a' | 'b', path: string) {
   await (await chooser).setFiles(path);
 }
 
+// Most of the workspace is the same in every view: these tests use the paragraphs lined up in
+// rows side by side (views.spec.ts has the view with connection bands, and the unified view).
 test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.clear());
-  await page.goto('/compare/sample/');
-  await expect(counter(page)).toContainText('of');
+  await openSample(page, { bands: false });
 });
 
 test('shows the sample comparison', async ({ page }) => {
@@ -235,8 +246,8 @@ test('the toolbar has the changes on the left, the view in the middle and editin
   const inColumn = async (column: string, ids: string[]) => {
     for (const id of ids) await expect(page.locator(`.toolbar .tcol.${column} #${id}`), id).toHaveCount(1);
   };
-  await inColumn('left', ['btn-prev', 'btn-next', 'btn-changes', 'counter', 'stats']);
-  await inColumn('middle', ['btn-minimap', 'btn-lines', 'btn-options', 'btn-page-prev', 'btn-page-next']);
+  await inColumn('left', ['btn-prev', 'btn-next', 'btn-changes', 'btn-stats']);
+  await inColumn('middle', ['view', 'btn-minimap', 'btn-lines', 'btn-bands', 'btn-options', 'btn-page-prev', 'btn-page-next']);
   await inColumn('right', ['btn-undo', 'btn-redo', 'btn-all', 'btn-sidebar']);
   await expect(page.locator('.appbar #btn-contrast')).toHaveCount(1);
   // The divider comes before the page buttons.
@@ -250,16 +261,48 @@ test('the toolbar has the changes on the left, the view in the middle and editin
   expect(right.x).toBeGreaterThanOrEqual(middle.x + middle.width);
   expect(Math.abs(right.x + right.width - (bar.x + bar.width - 16))).toBeLessThan(2);
   expect(bar.height).toBeLessThan(60);
-  await expect(page.locator('.tcol.left')).toHaveClass('tcol left');
 
-  // Narrower, the stats and counter say less rather than crowd the middle.
+  // Narrower, the three columns still fit on one line, the middle one centred.
   await page.setViewportSize({ width: 1024, height: 800 });
-  await expect(page.locator('.tcol.left')).toHaveClass(/short-stats/);
-  await expect(page.locator('.stat-words').first()).toBeHidden();
-  await expect(page.locator('#stats')).toContainText('12 changed');
   expect((await box('#toolbar')).height).toBeLessThan(60);
   const narrow = [await box('#toolbar'), await box('.tcol.middle')];
   expect(Math.abs(narrow[1]!.x + narrow[1]!.width / 2 - (narrow[0]!.x + narrow[0]!.width / 2))).toBeLessThan(2);
+});
+
+test('the toolbar buttons are borderless, like the app bar’s', async ({ page }) => {
+  const border = (sel: string) => page.locator(sel).evaluate((el) => getComputedStyle(el).borderTopColor);
+  expect(await border('#btn-next')).toBe('rgba(0, 0, 0, 0)');
+  expect(await border('#btn-undo')).toBe(await border('#btn-swap'));
+  await expect(page.locator('#btn-changes svg path')).toHaveAttribute('d', 'M9.5 3v3.5H13M3 9.5h3.5V13');
+});
+
+test('the counter sits between the column heads, above the ruler', async ({ page }) => {
+  const c = page.locator('.colhead.gut #counter');
+  await expect(c.locator('.c-short')).toHaveText('1/7');
+  await expect(c).toHaveAttribute('data-tip', 'Change 1 of 7');
+  const [pill, ruler] = [(await c.boundingBox())!, (await page.locator('#overview').boundingBox())!];
+  expect(Math.abs(pill.x + pill.width / 2 - (ruler.x + ruler.width / 2))).toBeLessThan(2);
+  expect(pill.y + pill.height).toBeLessThanOrEqual(ruler.y);
+  await page.keyboard.press('n');
+  await expect(c.locator('.c-short')).toHaveText('2/7');
+  await c.hover();
+  await expect(page.locator('.tip')).toHaveText('Change 2 of 7');
+});
+
+test('the summary of the changes shows on its icon', async ({ page }) => {
+  const card = page.locator('#stats');
+  await expect(card).toBeHidden();
+  await page.locator('#btn-stats').hover();
+  await expect(card).toBeVisible();
+  await expect(card.locator('.stat')).toHaveText(['12 changed', '1 only in A', '4 only in B']);
+  await page.mouse.move(700, 600);
+  await expect(card).toBeHidden();
+  // A click (or a tap) keeps it open; Escape puts it away.
+  await page.locator('#btn-stats').click();
+  await page.mouse.move(700, 600);
+  await expect(card).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(card).toBeHidden();
 });
 
 test('the theme button switches between light and dark', async ({ page }) => {
@@ -287,6 +330,9 @@ test('low contrast gives the sheets and the desk one colour, without borders', a
   expect(await desk()).toBe('rgb(255, 255, 255)');
   expect(await sheet()).toBe('rgb(255, 255, 255)');
   expect(await cell.evaluate((el) => getComputedStyle(el).borderLeftColor)).toBe('rgba(0, 0, 0, 0)');
+  // The column heads keep the line under them, where the documents start.
+  const head = page.locator('.slot[data-side="a"]');
+  expect(await head.evaluate((el) => [getComputedStyle(el).borderLeftColor, getComputedStyle(el).borderBottomColor])).toEqual(['rgba(0, 0, 0, 0)', 'rgb(237, 226, 221)']);
   // Dark: the sheets take the desk's navy.
   await page.emulateMedia({ colorScheme: 'dark' });
   expect(await desk()).toBe('rgb(11, 35, 43)');
@@ -351,7 +397,7 @@ test('loads two Word files, copies everything and exports a valid .docx', async 
 
   await page.locator('#btn-all').click();
   await page.locator('.pop [data-apply="all-r2l"]').click();
-  await expect(page.locator('#counter')).toHaveText('No differences');
+  await expect(counter(page)).toHaveText('No differences');
 
   await page.locator('.slot[data-side="a"] [data-menu="export"]').click();
   const download = page.waitForEvent('download');

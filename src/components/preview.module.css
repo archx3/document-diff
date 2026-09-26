@@ -258,14 +258,11 @@
   place-items: center;
   width: 26px;
   height: 24px;
-  border: 1px solid var(--line);
   border-radius: 6px;
-  background: var(--paper);
   color: var(--ink-2);
 }
 
 .row[data-current] .act {
-  border-color: var(--accent);
   color: var(--accent);
 }
 

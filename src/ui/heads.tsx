@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
 import type { Ref } from 'react';
 import { Ico } from '../components/icons';
+import type { Comparison } from '../core/compare';
 import type { Doc } from '../core/model';
 import { isBlank, wordCount } from '../core/model';
+import { Counter } from './counter';
 import type { Side } from './util';
 import { SIDE_NAME, kindLabel, plural } from './util';
 
@@ -12,20 +14,28 @@ interface HeadsProps {
   a: Doc;
   b: Doc;
   edits: Readonly<Record<Side, number>>;
+  /** For the counter between the heads. */
+  cmp: Comparison;
+  current: number;
   /** The document menu that is open, as "load-a" and so on. */
   open: string | null;
   onMenu(menu: DocMenu, side: Side, anchor: HTMLElement): void;
   ref?: Ref<HTMLDivElement>;
 }
 
-/** The documents' names above their columns, with buttons to replace and export each. */
-export function ColumnHeads({ a, b, edits, open, onMenu, ref }: HeadsProps) {
+/**
+ * The documents' names above their columns, with buttons to replace and
+ * export each, and between them, above the ruler, which change is current.
+ */
+export function ColumnHeads({ a, b, edits, cmp, current, open, onMenu, ref }: HeadsProps) {
   return (
     <div className="colheads" id="colheads" ref={ref}>
       <div className="colhead a">
         <Slot side="a" doc={a} edits={edits.a} open={open} onMenu={onMenu} />
       </div>
-      <div className="colhead gut" aria-hidden="true" />
+      <div className="colhead gut">
+        <Counter cmp={cmp} current={current} id="counter" />
+      </div>
       <div className="colhead b">
         <Slot side="b" doc={b} edits={edits.b} open={open} onMenu={onMenu} />
       </div>

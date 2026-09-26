@@ -23,13 +23,16 @@ import { DropOverlay, useFileDrop } from './drop';
 import type { LoadKind } from './empty';
 import { EmptyState } from './empty';
 import { exportDocument, printDocument } from './export';
+import { ElasticLayout } from './elastic';
+import { ElasticGrid } from './elastic-grid';
+import type { Place } from './grid';
 import { DocumentGrid, KeepPlace } from './grid';
 import type { DocMenu } from './heads';
 import { ColumnHeads } from './heads';
 import type { Docs } from './history';
 import { NO_DOCS, useDocHistory } from './history';
 import { useStable } from './hooks';
-import { GridLayout, scrollToHunk } from './layout';
+import { GridLayout, captureAnchor, restoreAnchor, scrollToHunk } from './layout';
 import { CopyMenu, ExportMenu, InlineMenu, LoadMenu, OptionsMenu, Popover } from './menus';
 import type { Notice } from './notices';
 import { Notices } from './notices';
@@ -40,13 +43,15 @@ import { Toasts, useToasts } from './toasts';
 import type { NavOff } from './toolbar';
 import { ALL_NAV_OFF, AppBar, Toolbar } from './toolbar';
 import { Tooltips } from './tooltip';
-import type { Side } from './util';
+import type { Side, View } from './util';
 import { SIDE_NAME, baseName, isTyping, other, plural, reducedMotion, sameText } from './util';
 
 const ACCEPT = ACCEPTED_EXTENSIONS.map((e) => `.${e}`).join(',');
 const PREFS_KEY = 'collate.prefs.v1';
 /** Below this width the list of changes covers the documents instead of sitting beside them. */
 const PANEL_OVERLAYS = '(max-width: 1099px)';
+/** Below this width there is no room for two columns: the view is always unified. */
+const PHONE = '(max-width: 640px)';
 /** Keys that scroll the documents when they have focus. */
 const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' ']);
 
@@ -54,8 +59,11 @@ const SCROLL_KEYS = new Set(['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'Ar
 interface Prefs {
   opts: CompareOptions;
   changesOnly: boolean;
+  view: View;
   minimap: boolean;
   lines: boolean;
+  /** Side by side, each document unbroken with bands joining the changes (rather than aligned rows). */
+  bands: boolean;
   lowContrast: boolean;
   sidebar: boolean;
 }
@@ -64,8 +72,22 @@ function panelOverlays(): boolean {
   return window.matchMedia?.(PANEL_OVERLAYS).matches ?? false;
 }
 
+/** Whether a media query matches, kept up to date. */
+function useMedia(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia?.(query).matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return;
+    const update = () => setMatches(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, [query]);
+  return matches;
+}
+
 function loadPrefs(): Prefs {
-  const prefs: Prefs = { opts: { ...DEFAULT_OPTIONS }, changesOnly: false, minimap: false, lines: false, lowContrast: false, sidebar: false };
+  const prefs: Prefs = { opts: { ...DEFAULT_OPTIONS }, changesOnly: false, view: 'split', minimap: false, lines: false, bands: true, lowContrast: false, sidebar: false };
   try {
     const raw = localStorage.getItem(PREFS_KEY);
     if (!raw) return prefs;
@@ -73,8 +95,10 @@ function loadPrefs(): Prefs {
     return {
       opts: { ...DEFAULT_OPTIONS, ...p.opts },
       changesOnly: !!p.changesOnly,
+      view: p.view === 'unified' ? 'unified' : 'split',
       minimap: !!p.minimap,
       lines: !!p.lines,
+      bands: p.bands ?? true,
       lowContrast: !!p.lowContrast,
       // An open list would cover a narrow screen's documents; it opens on request there.
       sidebar: !!p.sidebar && !panelOverlays(),
@@ -118,7 +142,12 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
   const history = useDocHistory(() => (docs ? { a: docs.a, b: docs.b, edits: { a: 0, b: 0 }, sample: false } : sample ? sampleDocs() : NO_DOCS));
   const { a, b, edits } = history.now;
   const [prefs, setPrefs] = useState(loadPrefs);
-  const { opts, changesOnly, minimap, lines, lowContrast, sidebar } = prefs;
+  const { opts, changesOnly, minimap, lines, bands, lowContrast, sidebar } = prefs;
+  // A phone has room for one column only.
+  const phone = useMedia(PHONE);
+  const view: View = phone ? 'unified' : prefs.view;
+  /** Side by side with each document unbroken and bands joining the changes. */
+  const elastic = view === 'split' && bands;
   const setPref = (patch: Partial<Prefs>) => setPrefs((p) => ({ ...p, ...patch }));
   useEffect(() => {
     try {
@@ -159,6 +188,38 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
   /** Runs once the page shows the next update. */
   const afterRender = useRef<(() => void) | null>(null);
   const [layout] = useState(() => new GridLayout(() => scroller.current, () => grid.current));
+  const [elasticLayout] = useState(() => new ElasticLayout());
+  /** Measures whichever grid is showing. */
+  const lay = elastic ? elasticLayout : layout;
+  /** The grid on the page is the one with connection bands (in a commit, it may not be the one being rendered). */
+  const isElastic = () => !!grid.current?.classList.contains('egrid');
+  const place = useMemo<Place>(
+    () => ({
+      capture: () => {
+        const sc = scroller.current;
+        const g = grid.current;
+        if (!sc || !g) return null;
+        return g.classList.contains('egrid') ? elasticLayout.capture() : captureAnchor(sc, g);
+      },
+      restore: (anchor) => {
+        const sc = scroller.current;
+        const g = grid.current;
+        if (!sc || !g) return;
+        if (g.classList.contains('egrid')) elasticLayout.restore(anchor);
+        else restoreAnchor(sc, g, anchor);
+      },
+    }),
+    [elasticLayout],
+  );
+
+  /** Scrolls a change into view in whichever grid is showing. */
+  const scrollToChange = (h: number, smooth: boolean) => {
+    const sc = scroller.current;
+    const g = grid.current;
+    if (!sc || !g) return;
+    if (isElastic()) elasticLayout.scrollToHunk(h, smooth);
+    else scrollToHunk(sc, g, h, smooth);
+  };
 
   /* -------------------------------------------------------- navigation */
 
@@ -171,7 +232,7 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
     if (!n) return -1;
     let base = cur;
     const sc = scroller.current;
-    const L = userScrolled.current && sc ? layout.measure() : null;
+    const L = userScrolled.current && sc ? lay.measure() : null;
     if (L && sc) {
       const top = sc.scrollTop + L.head;
       const bottom = sc.scrollTop + sc.clientHeight;
@@ -223,12 +284,12 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
     updateNav();
   });
 
-  // Widening the gutter or the list of changes moves every row.
-  useLayoutEffect(() => layout.invalidate(), [layout, minimap, lines, sidebar]);
+  // Widening the gutter or the list of changes, or changing the view, moves every row.
+  useLayoutEffect(() => layout.invalidate(), [layout, minimap, lines, sidebar, view]);
 
   const setCurrent = (h: number, scroll: boolean) => {
     setCurrentState(h);
-    if (scroll && scroller.current && grid.current) scrollToHunk(scroller.current, grid.current, h, !reducedMotion());
+    if (scroll) scrollToChange(h, !reducedMotion());
   };
 
   const step = (delta: 1 | -1) => {
@@ -288,6 +349,13 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
   const applyAll = (dir: Dir) => {
     if (cmp) apply(dir, selectAll(cmp), dir === 'l2r' ? 'B now matches A' : 'A now matches B');
   };
+
+  /** Copies a whole change across (the view with connection bands has one pair of arrows per change). */
+  const copyHunk = useStable((h: number, dir: Dir) => {
+    if (!cmp || !cmp.hunks[h]) return;
+    setCurrentState(h);
+    apply(dir, selectHunk(cmp, h), dir === 'l2r' ? 'Copied to B' : 'Copied to A');
+  });
 
   /** Copies a row, or one row of a table, across. */
   const copyRow = useStable((rowKey: string, dir: Dir, sub?: string) => {
@@ -407,8 +475,17 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
     setPref({ changesOnly: !changesOnly });
     setExpanded(new Set());
     afterRender.current = () => {
-      if (cur >= 0 && scroller.current && grid.current) scrollToHunk(scroller.current, grid.current, cur, false);
+      if (cur >= 0) scrollToChange(cur, false);
     };
+  };
+
+  const setView = (v: View) => {
+    if (phone || v === prefs.view) return;
+    setPref({ view: v });
+  };
+
+  const toggleBands = () => {
+    if (cmp && view === 'split') setPref({ bands: !bands });
   };
 
   const toggleSidebar = (open = !sidebar) => {
@@ -519,6 +596,12 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
         break;
       case 'l':
         if (cmp) setPref({ lines: !lines });
+        break;
+      case 'v':
+        if (cmp) setView(view === 'split' ? 'unified' : 'split');
+        break;
+      case 'b':
+        toggleBands();
         break;
       case 's':
         toggleSidebar();
@@ -663,7 +746,7 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
   else if (dialog?.type === 'gdoc') dialogBody = <GoogleDocDialog side={dialog.side} presetId={dialog.presetId} onLoad={startLoad} />;
   else if (dialog?.type === 'help') dialogBody = <HelpDialog />;
 
-  const appClass = ['app', minimap && 'with-map', lines && 'with-lines', lowContrast && 'lowc', !cmp && 'is-empty', busy && 'is-busy'].filter(Boolean).join(' ');
+  const appClass = ['app', view, elastic && 'elastic', minimap && 'with-map', lines && 'with-lines', lowContrast && 'lowc', !cmp && 'is-empty', busy && 'is-busy'].filter(Boolean).join(' ');
   const openId = pop && (pop.type === 'load' || pop.type === 'export') ? `${pop.type}-${pop.side}` : null;
   return (
     <div className={appClass} data-busy={busy || undefined} ref={root}>
@@ -683,8 +766,10 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
         current={cur}
         nav={nav}
         changesOnly={changesOnly}
+        view={view}
         minimap={minimap}
         lines={lines}
+        bands={bands}
         sidebar={sidebar}
         canUndo={history.canUndo}
         canRedo={history.canRedo}
@@ -693,8 +778,10 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
         onPrev={() => step(-1)}
         onNext={() => step(1)}
         onChangesOnly={toggleChangesOnly}
+        onView={setView}
         onMinimap={() => setPref({ minimap: !minimap })}
         onLines={() => setPref({ lines: !lines })}
+        onBands={toggleBands}
         onOptions={(e) => openPop({ type: 'options', anchor: e.currentTarget })}
         onPagePrev={() => page(-1)}
         onPageNext={() => page(1)}
@@ -721,13 +808,18 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
               onPointerDown={(e) => e.target === e.currentTarget && manual()}
               onKeyDown={(e) => SCROLL_KEYS.has(e.key) && manual()}
             >
-              <ColumnHeads a={a} b={b} edits={edits} open={openId} onMenu={openDocMenu} ref={heads} />
-              <KeepPlace scroller={scroller} grid={grid} watch={[items, minimap, lines, sidebar]}>
-                <DocumentGrid cmp={cmp} items={items} current={cur} onCopy={copyRow} onFold={onFold} onInline={onInline} onPick={onPick} onRender={onGridRender} ref={grid} />
+              <ColumnHeads a={a} b={b} edits={edits} cmp={cmp} current={cur} open={openId} onMenu={openDocMenu} ref={heads} />
+              {view === 'unified' && <div className="topcap" />}
+              <KeepPlace place={place} watch={[items, minimap, lines, sidebar, view, elastic]}>
+                {elastic ? (
+                  <ElasticGrid cmp={cmp} items={items} current={cur} layout={elasticLayout} onCopyHunk={copyHunk} onFold={onFold} onInline={onInline} onPick={onPick} ref={grid} />
+                ) : (
+                  <DocumentGrid cmp={cmp} items={items} current={cur} onCopy={copyRow} onFold={onFold} onInline={onInline} onPick={onPick} onRender={onGridRender} ref={grid} />
+                )}
               </KeepPlace>
-              <div className="endcap" />
+              {!elastic && <div className="endcap" />}
             </div>
-            <Overview layout={layout} scroller={scroller} current={cur} minimap={minimap} palette={`${dark}:${lowContrast}`} onGo={onOverviewGo} onScrolled={onOverviewScrolled} />
+            <Overview layout={lay} scroller={scroller} current={cur} minimap={minimap} palette={`${dark}:${lowContrast}`} onGo={onOverviewGo} onScrolled={onOverviewScrolled} />
             {sidebar && <ChangesPanel cmp={cmp} current={cur} same={same} onGo={goToChange} onClose={closeSidebar} />}
           </>
         ) : (

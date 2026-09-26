@@ -40,6 +40,11 @@ export interface Layout {
   chars: Record<'a' | 'b', number>;
 }
 
+/** Anything that can measure the grid: the aligned rows' GridLayout or the ElasticLayout. */
+export interface Measures {
+  measure(): Layout | null;
+}
+
 type Get = () => HTMLElement | null;
 
 /**
@@ -47,7 +52,7 @@ type Get = () => HTMLElement | null;
  * invalidate) or something changed size. Rows far off screen have estimated
  * heights until they are first shown.
  */
-export class GridLayout {
+export class GridLayout implements Measures {
   private version = 0;
   private measured: Layout | null = null;
 
@@ -86,8 +91,8 @@ export class GridLayout {
       const k = kind.replace(/^t/, '');
       if (k === 'mod' || k === 'del' || k === 'ins') h.kinds.add(k);
     }
-    const ma = metrics(grid, 'a');
-    const mb = metrics(grid, 'b');
+    const ma = lineMetrics(grid, 'a');
+    const mb = lineMetrics(grid, 'b');
     this.measured = {
       key,
       total: sc.scrollHeight,
@@ -102,7 +107,7 @@ export class GridLayout {
 }
 
 /** Line height and characters per line of one side's body text. */
-function metrics(grid: HTMLElement, side: 'a' | 'b'): { line: number; chars: number } {
+export function lineMetrics(grid: HTMLElement, side: 'a' | 'b'): { line: number; chars: number } {
   const cell = grid.querySelector<HTMLElement>(`.row > .cell.${side}`);
   if (!cell) return { line: 25, chars: 70 };
   const cs = getComputedStyle(cell);

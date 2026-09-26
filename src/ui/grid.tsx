@@ -1,5 +1,5 @@
 import { Component, memo, useLayoutEffect, useMemo } from 'react';
-import type { MouseEvent, ReactNode, Ref, RefObject } from 'react';
+import type { MouseEvent, ReactNode, Ref } from 'react';
 import { Ico } from '../components/icons';
 import type { Comparison, Row } from '../core/compare';
 import { computeListLabels } from '../core/lists';
@@ -7,7 +7,6 @@ import type { Dir } from '../core/merge';
 import type { CompareOptions } from '../core/tokens';
 import { optionsKey } from '../core/tokens';
 import type { Anchor } from './layout';
-import { captureAnchor, restoreAnchor } from './layout';
 import type { Labels } from './render';
 import type { Act, GridItem } from './rows';
 import { actLabels, numbering, rowParts } from './rows';
@@ -153,10 +152,10 @@ function Arrows({ act, rowKey, onCopy }: { act: Act; rowKey: string; onCopy: Gri
   return (
     <>
       <button type="button" className="act to-a" data-act="r2l" data-key={rowKey} data-sub={act.sub} data-tip={toA} aria-label={toA} onClick={() => onCopy(rowKey, 'r2l', act.sub)}>
-        <Ico name="toA" />
+        <Ico name="chevronsLeft" />
       </button>
       <button type="button" className="act to-b" data-act="l2r" data-key={rowKey} data-sub={act.sub} data-tip={toB} aria-label={toB} onClick={() => onCopy(rowKey, 'l2r', act.sub)}>
-        <Ico name="toB" />
+        <Ico name="chevronsRight" />
       </button>
     </>
   );
@@ -184,9 +183,14 @@ const FoldRow = memo(function FoldRow({ foldKey, count, onFold }: { foldKey: str
   );
 });
 
+/** Records which lines are at the top of the screen, and puts them back there. */
+export interface Place {
+  capture(): Anchor | null;
+  restore(anchor: Anchor): void;
+}
+
 interface KeepPlaceProps {
-  scroller: RefObject<HTMLElement | null>;
-  grid: RefObject<HTMLElement | null>;
+  place: Place;
   /** When any of these changes, the rows may move. */
   watch: readonly unknown[];
   children: ReactNode;
@@ -200,14 +204,13 @@ interface KeepPlaceProps {
  */
 export class KeepPlace extends Component<KeepPlaceProps> {
   override getSnapshotBeforeUpdate(prev: Readonly<KeepPlaceProps>): Anchor | null {
-    const { scroller, grid, watch } = this.props;
+    const { place, watch } = this.props;
     if (watch.length === prev.watch.length && watch.every((w, i) => Object.is(w, prev.watch[i]))) return null;
-    return scroller.current && grid.current ? captureAnchor(scroller.current, grid.current) : null;
+    return place.capture();
   }
 
   override componentDidUpdate(_prev: Readonly<KeepPlaceProps>, _state: unknown, anchor: Anchor | null): void {
-    const { scroller, grid } = this.props;
-    if (anchor && scroller.current && grid.current) restoreAnchor(scroller.current, grid.current, anchor);
+    if (anchor) this.props.place.restore(anchor);
   }
 
   override render(): ReactNode {

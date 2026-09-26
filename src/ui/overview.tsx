@@ -1,9 +1,9 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PointerEvent, RefObject } from 'react';
-import type { GridLayout, HunkBox, Layout } from './layout';
+import type { HunkBox, Layout, Measures } from './layout';
 
 interface OverviewProps {
-  layout: GridLayout;
+  layout: Measures;
   scroller: RefObject<HTMLElement | null>;
   current: number;
   minimap: boolean;
@@ -193,14 +193,19 @@ const Mark = memo(function Mark({ box, total, cur }: { box: HunkBox; total: numb
   );
 });
 
-/** Centres the overview on the gutter column, below the column heads. */
+/**
+ * Below the column heads: centred on the gutter between the columns, or in
+ * the unified view, just right of the one column.
+ */
 function place(box: HTMLElement, sc: HTMLElement, drawn: { place: string }): void {
   const stage = box.parentElement;
   const gutter = sc.querySelector('.colhead.gut');
   const heads = sc.querySelector<HTMLElement>('.colheads');
   if (!stage || !gutter || !heads) return;
-  const g = gutter.getBoundingClientRect();
-  const left = Math.round(g.left + g.width / 2 - stage.getBoundingClientRect().left);
+  const unified = !!sc.closest('.app.unified');
+  const g = unified ? heads.getBoundingClientRect() : gutter.getBoundingClientRect();
+  const x = unified ? g.right + 16 + box.offsetWidth / 2 : g.left + g.width / 2;
+  const left = Math.round(x - stage.getBoundingClientRect().left);
   const top = heads.offsetHeight + 6;
   const key = `${left}:${top}`;
   if (key === drawn.place) return;

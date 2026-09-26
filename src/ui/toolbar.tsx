@@ -1,8 +1,10 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
-import type { MouseEvent, ReactNode, RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from 'react';
 import type { IconName } from '../components/icons';
 import { Ico } from '../components/icons';
 import type { Comparison } from '../core/compare';
+import { Counter } from './counter';
+import type { View } from './util';
 
 type Click = (e: MouseEvent<HTMLButtonElement>) => void;
 
@@ -15,7 +17,6 @@ interface ToolProps {
   /** Shortcut as shown, and in aria-keyshortcuts form when that differs. */
   kbd?: string;
   keys?: string;
-  ghost?: boolean;
   /** Styled as a toggle: highlighted while pressed. */
   toggle?: boolean;
   pressed?: boolean;
@@ -30,9 +31,9 @@ interface ToolProps {
   children?: ReactNode;
 }
 
-/** An icon button: its label is its accessible name and tooltip. */
-export function Tool({ id, icon, label, tip, kbd, keys, ghost, toggle, pressed, menu, expanded, controls, className, disabled, onClick, children }: Readonly<ToolProps>) {
-  const cls = ['btn', menu ? 'icon-menu' : 'icon-only', ghost && 'ghost', toggle && 'toggle', className].filter(Boolean).join(' ');
+/** An icon button, borderless until hovered: its label is its accessible name and tooltip. */
+export function Tool({ id, icon, label, tip, kbd, keys, toggle, pressed, menu, expanded, controls, className, disabled, onClick, children }: Readonly<ToolProps>) {
+  const cls = ['btn ghost', menu ? 'icon-menu' : 'icon-only', toggle && 'toggle', className].filter(Boolean).join(' ');
   return (
     <button
       type="button"
@@ -142,19 +143,10 @@ export function AppBar({ home, hasDocs, lowContrast, dark, onSwap, onNew, onCont
         <span className="brand-tag">Compare two documents and copy changes across</span>
       </div>
       <div className="appbar-actions">
-        <Tool id="btn-swap" icon="swap" label="Swap A and B" ghost disabled={!hasDocs} onClick={onSwap} />
-        <Tool id="btn-new" icon="newDoc" label="New comparison" tip="New comparison: start again with two documents" ghost disabled={!hasDocs} onClick={onNew} />
-        <Tool id="btn-contrast" icon="contrast" label="Low contrast" tip="Low contrast: no borders, one background" ghost toggle pressed={lowContrast} onClick={onContrast} />
-        <Tool
-          id="btn-theme"
-          icon="moon"
-          label="Dark theme"
-          tip={dark ? 'Switch to the light theme' : 'Switch to the dark theme'}
-          ghost
-          className="theme-btn"
-          pressed={dark}
-          onClick={onTheme}
-        >
+        <Tool id="btn-swap" icon="swap" label="Swap A and B" disabled={!hasDocs} onClick={onSwap} />
+        <Tool id="btn-new" icon="newDoc" label="New comparison" tip="New comparison: start again with two documents" disabled={!hasDocs} onClick={onNew} />
+        <Tool id="btn-contrast" icon="contrast" label="Low contrast" tip="Low contrast: no borders, one background" toggle pressed={lowContrast} onClick={onContrast} />
+        <Tool id="btn-theme" icon="moon" label="Dark theme" tip={dark ? 'Switch to the light theme' : 'Switch to the dark theme'} className="theme-btn" pressed={dark} onClick={onTheme}>
           {/* The icon shows the theme it switches to, through CSS (styles.css). */}
           <span className="theme-moon">
             <Ico name="moon" />
@@ -163,7 +155,7 @@ export function AppBar({ home, hasDocs, lowContrast, dark, onSwap, onNew, onCont
             <Ico name="sun" />
           </span>
         </Tool>
-        <Tool id="btn-help" icon="help" label="Help and keyboard shortcuts" kbd="?" ghost onClick={onHelp} />
+        <Tool id="btn-help" icon="help" label="Help and keyboard shortcuts" kbd="?" onClick={onHelp} />
       </div>
     </header>
   );
@@ -184,8 +176,10 @@ interface ToolbarProps {
   current: number;
   nav: NavOff;
   changesOnly: boolean;
+  view: View;
   minimap: boolean;
   lines: boolean;
+  bands: boolean;
   sidebar: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -196,8 +190,10 @@ interface ToolbarProps {
   onPrev: Click;
   onNext: Click;
   onChangesOnly: Click;
+  onView(view: View): void;
   onMinimap: Click;
   onLines: Click;
+  onBands: Click;
   onOptions: Click;
   onPagePrev: Click;
   onPageNext: Click;
@@ -211,22 +207,20 @@ interface ToolbarProps {
  * Three columns: the changes on the left, the view in the middle (centred)
  * and editing on the right.
  */
-export function Toolbar (p: Readonly<ToolbarProps>) {
+export function Toolbar(p: Readonly<ToolbarProps>) {
   const bar = useRef<HTMLDivElement>(null);
-  const left = useRef<HTMLDivElement>(null);
   useFocusRescue(bar);
-  useFit(left);
   const n = p.cmp?.hunks.length ?? 0;
-  const s = p.cmp?.stats;
+  const split = p.view === 'split';
   return (
     <div className={`toolbar${p.cmp ? '' : ' disabled'}${p.cmp && n === 0 ? ' same' : ''}`} id="toolbar" role="toolbar" aria-label="Comparison tools" ref={bar}>
-      <div className="tcol left" role="group" aria-label="Changes" ref={left}>
+      <div className="tcol left" role="group" aria-label="Changes">
         <div className="tgroup nav">
           <Tool id="btn-prev" icon="up" label="Previous change" kbd="P" disabled={p.nav.prev} onClick={p.onPrev} />
           <Tool id="btn-next" icon="down" label="Next change" kbd="N" disabled={p.nav.next} onClick={p.onNext} />
           <Tool
             id="btn-changes"
-            icon="fold"
+            icon="changesOnly"
             label="Changes only"
             tip="Changes only: fold unchanged paragraphs"
             kbd="C"
@@ -236,39 +230,25 @@ export function Toolbar (p: Readonly<ToolbarProps>) {
             onClick={p.onChangesOnly}
           />
         </div>
-        <span className="counter" id="counter" aria-live="polite">
-          {p.cmp &&
-            (n === 0 ? (
-              <>
-                <Ico name="check" />
-                <span className="same">No differences</span>
-              </>
-            ) : (
-              <>
-                <span className="c-word">Change </span>
-                <b>{p.current + 1}</b>
-                <span className="c-of"> of </span>
-                <b className="c-n">{n}</b>
-              </>
-            ))}
-        </span>
-        <div className="stats" id="stats">
-          {s &&
-            (n === 0 ? (
-              <span className="stat ok">{p.same}</span>
-            ) : (
-              <>
-                {/* Where the toolbar is short of room, only the numbers show; the tooltip names them. */}
-                <Stat kind="mod" count={s.changed} words="changed" tip="Paragraphs that differ" />
-                <Stat kind="del" count={s.removed} words="only in A" tip="Paragraphs only in A" />
-                <Stat kind="ins" count={s.added} words="only in B" tip="Paragraphs only in B" />
-              </>
-            ))}
-        </div>
+        {/* On a phone the column heads, where the counter usually is, scroll away. */}
+        <Counter cmp={p.cmp} current={p.current} className="counter-m" />
+        <StatsHint cmp={p.cmp} same={p.same} />
       </div>
       <div className="tcol middle" role="group" aria-label="View">
+        <ViewSwitch view={p.view} disabled={!p.cmp} onView={p.onView} />
         <Tool id="btn-minimap" icon="minimap" label="Minimap" tip="Minimap of each document beside the ruler" kbd="M" toggle pressed={p.minimap} disabled={!p.cmp} onClick={p.onMinimap} />
         <Tool id="btn-lines" icon="lineNumbers" label="Line numbers" tip="Line numbers in the gutter" kbd="L" toggle pressed={p.lines} disabled={!p.cmp} onClick={p.onLines} />
+        <Tool
+          id="btn-bands"
+          icon="connector"
+          label="Connection bands"
+          tip={split ? 'Connection bands: each document runs on unbroken, with bands joining its changes to the other’s' : 'Connection bands: in the side by side view'}
+          kbd="B"
+          toggle
+          pressed={p.bands && split}
+          disabled={!p.cmp || !split}
+          onClick={p.onBands}
+        />
         <Tool
           id="btn-options"
           icon="sliders"
@@ -299,45 +279,136 @@ export function Toolbar (p: Readonly<ToolbarProps>) {
   );
 }
 
-function Stat({ kind, count, words, tip }: Readonly<{ kind: string; count: number; words: string; tip: string }>) {
+const VIEWS: ReadonlyArray<{ view: View; icon: IconName; label: string; tip: string }> = [
+  { view: 'split', icon: 'sideBySide', label: 'Side by side', tip: 'Side by side' },
+  { view: 'unified', icon: 'unified', label: 'Unified', tip: 'Unified: one column, A above B where they differ' },
+];
+
+/** Side by side or unified: two segments, one of them chosen, that arrow keys move between. */
+function ViewSwitch({ view, disabled, onView }: Readonly<{ view: View; disabled: boolean; onView(view: View): void }>) {
+  const group = useRef<HTMLDivElement>(null);
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const i = VIEWS.findIndex((v) => v.view === view);
+    const to = e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'Home' ? 0 : e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'End' ? VIEWS.length - 1 : -1;
+    if (to < 0 || to === i) return;
+    e.preventDefault();
+    onView(VIEWS[to]!.view);
+    group.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[to]?.focus();
+  };
   return (
-    <span className={`stat ${kind}`} data-tip={tip}>
-      {count.toLocaleString()}
-      <span className="stat-words"> {words}</span>
-    </span>
+    <div className="seg" id="view" role="radiogroup" aria-label="View" ref={group} onKeyDown={onKeyDown}>
+      {VIEWS.map((v) => (
+        <button
+          key={v.view}
+          type="button"
+          role="radio"
+          id={`btn-view-${v.view}`}
+          aria-checked={view === v.view}
+          aria-label={v.label}
+          aria-keyshortcuts="V"
+          data-tip={v.tip}
+          data-kbd="V"
+          tabIndex={view === v.view ? 0 : -1}
+          disabled={disabled}
+          onClick={() => onView(v.view)}
+        >
+          <Ico name={v.icon} />
+        </button>
+      ))}
+    </div>
   );
 }
 
 /**
- * Shortens the counter and stats only as far as their column needs: first the
- * stats lose their words, then the counter reads "1 / 7". As a last resort
- * they wrap. The column takes its share of the toolbar whatever its content,
- * so it is measured after every render and whenever it changes size.
+ * The summary of the changes behind an icon: shown while the pointer rests on
+ * it or it has keyboard focus, and kept open by a click (a tap on a phone).
  */
-function useFit(col: RefObject<HTMLElement | null>) {
-  const fit = () => {
-    const el = col.current;
-    if (!el) return;
-    const fits = () => el.scrollWidth <= el.clientWidth + 1;
-    el.classList.remove('short-stats', 'short-count', 'wrap');
-    for (const level of ['short-stats', 'short-count', 'wrap']) {
-      if (fits()) return;
-      el.classList.add(level);
-    }
-  };
-  useLayoutEffect(fit);
+function StatsHint({ cmp, same }: Readonly<{ cmp: Comparison | null; same: string }>) {
+  const [hover, setHover] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  const timer = useRef(0);
+  const open = !!cmp && (hover || focus || pinned);
+  const s = cmp?.stats;
+  const n = cmp?.hunks.length ?? 0;
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+  // A press anywhere else, or Escape, puts it away.
   useEffect(() => {
-    const el = col.current;
-    if (!el) return;
-    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
-    ro?.observe(el);
-    // Text is measured again once the web fonts are in.
-    let live = true;
-    void document.fonts?.ready.then(() => live && fit());
-    return () => {
-      live = false;
-      ro?.disconnect();
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) {
+        setPinned(false);
+        setHover(false);
+      }
     };
-    // `fit` only reads the column, so the first one serves for good.
-  }, [col]);
+    const esc = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setPinned(false);
+      setHover(false);
+      setFocus(false);
+    };
+    document.addEventListener('pointerdown', away, true);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('pointerdown', away, true);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+
+  // Shown after a moment's rest, so passing over it on the way elsewhere does nothing; kept
+  // for a moment after the pointer leaves, so it can move onto the card.
+  const rest = (on: boolean) => {
+    clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setHover(on), on ? 120 : 160);
+  };
+
+  return (
+    <div
+      className="stats-hint"
+      ref={box}
+      onPointerEnter={(e) => e.pointerType !== 'touch' && rest(true)}
+      onPointerLeave={(e) => e.pointerType !== 'touch' && rest(false)}
+    >
+      <button
+        type="button"
+        className="btn ghost icon-only"
+        id="btn-stats"
+        aria-label="Summary of the changes"
+        aria-describedby="stats"
+        aria-expanded={open}
+        disabled={!cmp}
+        onClick={() => setPinned((v) => !v)}
+        onFocus={(e) => setFocus(e.currentTarget.matches(':focus-visible'))}
+        onBlur={() => {
+          setFocus(false);
+          setPinned(false);
+        }}
+      >
+        <Ico name="info" />
+      </button>
+      <div className="stats-card" id="stats" role="tooltip" hidden={!open}>
+        {s &&
+          (n === 0 ? (
+            <span className="stat ok">{same}</span>
+          ) : (
+            <>
+              <span className="stats-head">Paragraphs</span>
+              <Stat kind="mod" count={s.changed} words="changed" />
+              <Stat kind="del" count={s.removed} words="only in A" />
+              <Stat kind="ins" count={s.added} words="only in B" />
+            </>
+          ))}
+      </div>
+    </div>
+  );
+}
+
+function Stat({ kind, count, words }: Readonly<{ kind: string; count: number; words: string }>) {
+  return (
+    <span className={`stat ${kind}`}>
+      <b>{count.toLocaleString()}</b> {words}
+    </span>
+  );
 }

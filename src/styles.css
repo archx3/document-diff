@@ -36,6 +36,8 @@
   --ok-line: #bddccb;
   /* Low contrast mode: the one background shared by the desk and the sheets (here the sheets' white). */
   --lowc: #ffffff;
+  /* A recess in a bar, such as the view switch's. */
+  --well: rgba(22, 56, 75, 0.05);
   --backdrop: rgba(18, 48, 63, 0.45);
   --shadow: 0 18px 40px -16px rgba(22, 56, 75, 0.45), 0 2px 8px rgba(22, 56, 75, 0.08); /* su-pop */
   /* The rest of the palette, for the site's pages. */
@@ -103,6 +105,7 @@
     --ok-line: #2b5a4b;
     /* The desk's navy: the sheets take the desk's colour. */
     --lowc: #0b232b;
+    --well: rgba(0, 0, 0, 0.22);
     --backdrop: rgba(3, 14, 18, 0.62);
     --shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
     --teal: #5bc3ca;
@@ -157,6 +160,7 @@
   --ok-tint: #163a30;
   --ok-line: #2b5a4b;
   --lowc: #0b232b;
+  --well: rgba(0, 0, 0, 0.22);
   --backdrop: rgba(3, 14, 18, 0.62);
   --shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
   --teal: #5bc3ca;
@@ -290,7 +294,9 @@ kbd {
   --num-w: 0px;
   --map-w: 0px;
   --map-gap: 0px;
-  --gut: calc(2 * (var(--num-w) + var(--act-w) + var(--ov-gap) + var(--map-w) + var(--map-gap)) + var(--rail-w) + 8px);
+  /* Room for the connection bands to curve, either side of the overview. */
+  --band-w: 0px;
+  --gut: calc(2 * (var(--num-w) + var(--act-w) + var(--band-w) + var(--ov-gap) + var(--map-w) + var(--map-gap)) + var(--rail-w) + 8px);
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -308,7 +314,8 @@ kbd {
 }
 
 /* Low contrast: no borders round the sheets, and one background for the desk and the sheets.
-   In the light theme the desk turns white; in the dark theme the sheets take the desk's navy. */
+   In the light theme the desk turns white; in the dark theme the sheets take the desk's navy.
+   The current change is marked by its ruler mark, its arrows and its band, not by borders. */
 .app.lowc {
   --desk: var(--lowc);
 }
@@ -320,17 +327,20 @@ kbd {
 .app.lowc .slot,
 .app.lowc .endcap::before,
 .app.lowc .endcap::after,
+.app.lowc .topcap::before,
 .app.lowc .mm {
   border-color: transparent;
   box-shadow: none;
 }
 
-.app.lowc .cell {
-  border-color: transparent !important;
+/* The line under the column heads stays, to show where the documents start. */
+.app.lowc .slot {
+  border-bottom-color: var(--line);
 }
 
-.app.lowc .row.cur .cell {
-  border-inline-color: var(--accent) !important;
+.app.lowc .cell,
+.app.lowc .gut {
+  border-color: transparent !important;
 }
 
 /* ------------------------------------------------------------ app bar */
@@ -548,41 +558,13 @@ a.brand-word {
   min-width: 0;
 }
 
-/* The left column takes its share of the toolbar, whatever its content; the app shortens the
-   stats, then the counter, when they don't fit, and lets them wrap as a last resort. */
 .tcol.left {
   grid-area: left;
-  gap: 6px 12px;
+  gap: 6px;
 }
 
 .tcol.left > * {
   flex: none;
-}
-
-.tcol.left.wrap {
-  flex-wrap: wrap;
-}
-
-/* Stats as just their numbers (their tooltips name them). */
-.tcol.left.short-stats .stat-words {
-  display: none;
-}
-
-/* The counter as "1 / 7". */
-.tcol.left.short-count .counter {
-  min-width: 0;
-}
-
-.tcol.left.short-count .c-word,
-.tcol.left.short-count .c-of {
-  display: none;
-}
-
-.tcol.left.short-count .c-n::before {
-  content: '/';
-  padding: 0 3px;
-  color: var(--ink-3);
-  font-weight: 400;
 }
 
 .tcol.middle {
@@ -621,15 +603,30 @@ a.brand-word {
   padding: 0 10px;
 }
 
+/* Which change is current, "3/12": between the column heads, above the ruler (and on a phone,
+   where the heads scroll away, in the toolbar). */
 .counter {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   font: 12.5px/1 var(--font-mono);
-  color: var(--ink-2);
-  padding-left: 6px;
+  color: var(--ink-3);
   font-variant-numeric: tabular-nums;
-  min-width: 11ch;
+  white-space: nowrap;
+}
+
+.counter:empty,
+.counter:has(> .vh:only-child) {
+  display: none;
+}
+
+.c-short {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--paper);
 }
 
 .counter b {
@@ -637,35 +634,78 @@ a.brand-word {
   font-weight: 500;
 }
 
-.counter .ico,
-.counter .same {
+.c-sep {
+  padding: 0 2px;
+}
+
+.counter.none .c-short {
+  padding: 0 6px;
+  border-color: var(--ok-line);
+  background: var(--ok-tint);
   color: var(--ok);
 }
 
-.counter .same {
-  font-weight: 500;
+.counter-m {
+  display: none;
 }
 
-.stats {
-  display: flex;
-  align-items: center;
-  gap: 14px;
+/* The summary of the changes, behind an icon. */
+.stats-hint {
+  position: relative;
+}
+
+.stats-card {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  gap: 7px;
+  min-width: 180px;
+  padding: 10px 14px 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  animation: tip-in 0.12s ease-out;
+}
+
+.stats-card[hidden] {
+  display: none;
+}
+
+.stats-head {
+  font: 600 10.5px/1.2 var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
 .stat {
-  font-size: 12.5px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
   color: var(--ink-2);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
+.stat b {
+  min-width: 2ch;
+  color: var(--ink);
+  font-weight: 600;
+  text-align: right;
+}
+
 .stat::before {
   content: '';
+  flex: none;
   display: inline-block;
   width: 9px;
   height: 9px;
-  margin-right: 6px;
   border-radius: 2px;
+  align-self: center;
 }
 
 .stat.mod::before {
@@ -682,11 +722,57 @@ a.brand-word {
 
 .stat.ok {
   color: var(--ok);
+  font-weight: 500;
 }
 
 .stat.ok::before {
   display: none;
 }
+
+/* Side by side or unified: two segments in a well, the chosen one raised. */
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  margin-right: 4px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--well);
+}
+
+.seg button {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition:
+    background-color 0.12s,
+    color 0.12s;
+}
+
+.seg button:hover {
+  color: var(--ink);
+}
+
+.seg button[aria-checked='true'] {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 1px 2px rgba(22, 56, 75, 0.08);
+}
+
+.seg button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
 
 /* ------------------------------------------------------------- notice */
 
@@ -769,6 +855,13 @@ a.brand-word {
 .colhead.a .slot,
 .colhead.b .slot {
   border-radius: 12px 12px 0 0;
+}
+
+.colhead.gut {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
 }
 
 .slot {
@@ -956,35 +1049,31 @@ a.brand-word {
   font-weight: 600;
 }
 
+/* The copy arrows look like the app bar's buttons: no border or background until hovered. */
 .act {
   width: 28px;
   height: 26px;
   display: grid;
   place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--paper);
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
   color: var(--ink-2);
   cursor: pointer;
   transition:
     background-color 0.12s,
-    color 0.12s,
-    border-color 0.12s;
+    color 0.12s;
 }
 
 .act:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--line-2);
+  color: var(--ink);
 }
 
+/* The current change's arrows are in the accent colour. */
 .row.cur .act {
-  border-color: var(--accent);
   color: var(--accent);
-}
-
-.row.cur .act:hover {
-  color: var(--accent-ink);
 }
 
 .row.cur .cell {
@@ -1067,6 +1156,490 @@ a.brand-word {
 
 .endcap::after {
   grid-column: 3;
+}
+
+/* ------------------------------------------------- connection bands */
+
+/* Side by side with connection bands (elastic.ts): each document runs on in its own column, and
+   the columns slide against each other as the page scrolls. Each column takes its sheet and its
+   part of the gutter (line numbers and the change's arrow); the bands curve in the middle, under
+   the overview. */
+.app.elastic {
+  --band-w: 22px;
+}
+
+.app.elastic .scroller {
+  /* The columns move as the page scrolls; the app keeps the reader's place itself. */
+  overflow-anchor: none;
+}
+
+.egrid {
+  --side-w: calc(var(--num-w) + var(--act-w) + 4px);
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.ecol {
+  position: absolute;
+  top: 0;
+  width: calc((100% - var(--gut)) / 2 + var(--side-w));
+  will-change: transform;
+}
+
+.ecol.a {
+  left: 0;
+}
+
+.ecol.b {
+  right: 0;
+}
+
+.ecol > .row {
+  position: relative;
+  max-width: none;
+  margin: 0;
+}
+
+.ecol.a > .row {
+  grid-template-columns: minmax(0, 1fr) var(--side-w);
+}
+
+.ecol.b > .row {
+  grid-template-columns: var(--side-w) minmax(0, 1fr);
+}
+
+.egut {
+  display: grid;
+  align-items: start;
+  padding-top: 7px;
+}
+
+.ecol.a .egut {
+  grid-column: 2;
+  grid-template-columns: var(--num-w) var(--act-w);
+  padding-left: 4px;
+}
+
+.ecol.b .egut {
+  grid-column: 1;
+  grid-template-columns: var(--act-w) var(--num-w);
+  padding-right: 4px;
+}
+
+.egut .act {
+  grid-row: 1;
+}
+
+.ecol.a .egut .act {
+  grid-column: 2;
+}
+
+.ecol.b .egut .act {
+  grid-column: 1;
+}
+
+.app.with-lines .egut[data-n]::before {
+  content: attr(data-n);
+  grid-row: 1;
+  overflow: hidden;
+  font: 500 11px/26px var(--font-mono);
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.app.with-lines .ecol.a .egut::before {
+  grid-column: 1;
+  padding-left: 3px;
+}
+
+.app.with-lines .ecol.b .egut::before {
+  grid-column: 2;
+  padding-right: 3px;
+  text-align: right;
+}
+
+.app.with-lines .grid.mono-a .ecol.a .egut::before,
+.app.with-lines .grid.mono-b .ecol.b .egut::before {
+  margin-top: -4px;
+  line-height: 20px;
+}
+
+.app.with-lines .ecol .row.cur .egut::before {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Where the other side's paragraphs would go: a line across the sheet, in the colour of what is
+   missing here (B's green where B added text, A's terracotta where B removed it). */
+.ecol > .row.gap {
+  height: 0;
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
+.ecol > .row.gap::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--chg);
+}
+
+.ecol.a > .row.gap::after {
+  left: 0;
+  right: var(--side-w);
+}
+
+.ecol.b > .row.gap::after {
+  left: var(--side-w);
+  right: 0;
+}
+
+.ecol > .row.k-ins.gap::after,
+.ecol > .row.k-tins.gap::after {
+  background: var(--b);
+}
+
+.ecol > .row.k-del.gap::after,
+.ecol > .row.k-tdel.gap::after {
+  background: var(--a);
+}
+
+.ecol > .row.gap > .egut {
+  position: absolute;
+  z-index: 2;
+  top: -13px;
+  padding-top: 0;
+}
+
+.ecol.a > .row.gap > .egut {
+  right: 0;
+  width: var(--side-w);
+}
+
+.ecol.b > .row.gap > .egut {
+  left: 0;
+  width: var(--side-w);
+}
+
+.ecol > .row.fold {
+  display: grid;
+}
+
+.ecol .fold-btn {
+  display: flex;
+  grid-column: 1;
+}
+
+.ecol.b .fold-btn {
+  grid-column: 2;
+}
+
+.ecol .fold-side {
+  flex: 1;
+}
+
+.grid > .ecol > .row.frag:first-child .trow {
+  border-top: 1px solid var(--ink-3);
+}
+
+.ecap {
+  height: 26px;
+}
+
+.ecap::before {
+  content: '';
+  display: block;
+  height: 100%;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 12px 12px;
+}
+
+.ecol.a .ecap::before {
+  margin-right: var(--side-w);
+}
+
+.ecol.b .ecap::before {
+  margin-left: var(--side-w);
+}
+
+.app.lowc .ecap::before {
+  border-color: transparent;
+}
+
+/* The bands: under the columns (whose part of the gutter is see-through) and the overview. */
+.bands {
+  position: absolute;
+  top: 0;
+  left: calc((100% - var(--gut)) / 2);
+  width: var(--gut);
+  height: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.band {
+  fill: var(--chg);
+  fill-opacity: 0.14;
+  pointer-events: visiblePainted;
+  cursor: pointer;
+  transition: fill-opacity 0.12s;
+}
+
+.band-edge {
+  fill: none;
+  stroke: var(--chg);
+  stroke-width: 1;
+  stroke-opacity: 0.55;
+}
+
+.band.k-del {
+  fill: var(--a);
+}
+
+.band-edge.k-del {
+  stroke: var(--a);
+}
+
+.band.k-ins {
+  fill: var(--b);
+}
+
+.band-edge.k-ins {
+  stroke: var(--b);
+}
+
+.band:hover {
+  fill-opacity: 0.2;
+}
+
+.band.cur {
+  fill-opacity: 0.24;
+}
+
+.band-edge.cur {
+  stroke-opacity: 1;
+  stroke-width: 1.5;
+}
+
+/* Low contrast: the sheets have no borders to close the bands' ends, so each band has a line all
+   the way round rather than along its top and bottom. */
+.band-line {
+  display: none;
+  fill: none;
+  stroke: var(--chg);
+  stroke-width: 1;
+  stroke-opacity: 0.7;
+}
+
+.band-line.k-del {
+  stroke: var(--a);
+}
+
+.band-line.k-ins {
+  stroke: var(--b);
+}
+
+.band-line.cur {
+  stroke-opacity: 1;
+  stroke-width: 1.5;
+}
+
+.app.lowc .band-edge {
+  display: none;
+}
+
+.app.lowc .band-line {
+  display: inline;
+}
+
+/* ------------------------------------------------------------ unified */
+
+/* One column: unchanged paragraphs once, and where the documents differ, A's version above B's.
+   On a phone it is the only view (see the narrow section at the end); on a wider screen each
+   version has its line numbers and arrow in a gutter on its left, and the overview is on the
+   right of the column. */
+.app.unified .act .ico {
+  /* Up into A, down into B. */
+  transform: rotate(90deg);
+}
+
+.app.unified .row.k-mod .cell.b,
+.app.unified .row.k-tmod .cell.b {
+  box-shadow: inset 3px 0 0 var(--chg);
+}
+
+.app.unified .row.k-ins .cell.b,
+.app.unified .row.k-tins .cell.b {
+  box-shadow: inset 3px 0 0 var(--b);
+}
+
+@media (min-width: 641px) {
+  .app.unified {
+    --ugut: calc(2 * var(--num-w) + var(--act-w) + 10px);
+    --uni-w: calc(880px + var(--ugut));
+    /* The overview, which goes right of the column. */
+    --ov-w: calc(2 * (var(--map-w) + var(--map-gap)) + var(--rail-w));
+  }
+
+  .app.unified .scroller {
+    padding-inline: calc(var(--pad) + var(--ov-w) + 16px);
+  }
+
+  .app.unified .colheads,
+  .app.unified .topcap,
+  .app.unified .row,
+  .app.unified .endcap {
+    max-width: var(--uni-w);
+    grid-template-columns: var(--ugut) minmax(0, 1fr);
+  }
+
+  .app.unified .colheads {
+    grid-template-columns: var(--ugut) minmax(0, 1fr) 96px minmax(0, 1fr);
+    padding-bottom: 10px;
+  }
+
+  .app.unified .colhead.a {
+    grid-column: 2;
+  }
+
+  .app.unified .colhead.gut {
+    grid-column: 3;
+  }
+
+  .app.unified .colhead.b {
+    grid-column: 4;
+  }
+
+  .app.unified .colhead.a .slot,
+  .app.unified .colhead.b .slot {
+    border-radius: 12px;
+  }
+
+  .app.unified .topcap {
+    display: grid;
+    height: 14px;
+    margin: 0 auto;
+  }
+
+  .app.unified .topcap::before {
+    content: '';
+    grid-column: 2;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 12px 12px 0 0;
+  }
+
+  .app.unified.lowc .topcap::before {
+    border-color: transparent;
+  }
+
+  .app.unified .row {
+    grid-template-rows: auto auto;
+  }
+
+  .app.unified .row > .cell.a {
+    grid-area: 1 / 2;
+  }
+
+  .app.unified .row > .cell.b {
+    grid-area: 2 / 2;
+  }
+
+  .app.unified .row.k-eq > .cell.b,
+  .app.unified .row.k-teq > .cell.b,
+  .app.unified .row.k-tcap > .cell.b {
+    display: none;
+  }
+
+  /* A's number, B's number and the arrow, level with each version. */
+  .app.unified .row > .gut {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    grid-template-columns: var(--num-w) var(--num-w) var(--act-w);
+    grid-template-rows: subgrid;
+    padding: 0 6px 0 4px;
+  }
+
+  .app.unified .gut > .act,
+  .app.unified.with-lines .gut::before,
+  .app.unified.with-lines .gut::after {
+    margin-top: 7px;
+  }
+
+  .app.unified .gut > .act.to-a {
+    grid-area: 1 / 3;
+  }
+
+  .app.unified .gut > .act.to-b {
+    grid-area: 2 / 3;
+  }
+
+  .app.unified.with-lines .gut::before {
+    grid-area: 1 / 1;
+  }
+
+  .app.unified.with-lines .gut::after {
+    grid-area: 2 / 2;
+  }
+
+  .app.unified.with-lines .row.k-eq .gut::after,
+  .app.unified.with-lines .row.k-teq .gut::after {
+    grid-row: 1;
+  }
+
+  .app.unified.with-lines .grid.mono-a .gut::before,
+  .app.unified.with-lines .grid.mono-b .gut::after {
+    margin-top: 3px;
+  }
+
+  /* Which version is which. */
+  .app.unified .row:not(.k-eq):not(.k-teq):not(.k-tcap):not(.fold) > .cell {
+    position: relative;
+  }
+
+  .app.unified .row:not(.k-eq):not(.k-teq):not(.k-tcap):not(.fold) > .cell::before {
+    position: absolute;
+    top: 9px;
+    left: 10px;
+    font: italic 600 13px/1 var(--font-doc);
+    color: var(--accent);
+  }
+
+  .app.unified .row:not(.k-eq):not(.k-teq):not(.k-tcap):not(.fold) > .cell.a::before {
+    content: 'A';
+  }
+
+  .app.unified .row:not(.k-eq):not(.k-teq):not(.k-tcap):not(.fold) > .cell.b::before {
+    content: 'B';
+  }
+
+  .app.unified .fold-btn {
+    grid-column: 2;
+    display: flex;
+  }
+
+  .app.unified .fold-side {
+    flex: 1;
+  }
+
+  .app.unified .fold-side + .fold-side {
+    display: none;
+  }
+
+  .app.unified .endcap::before {
+    grid-column: 2;
+  }
+
+  .app.unified .endcap::after {
+    display: none;
+  }
 }
 
 /* ------------------------------------------------------ document text */
@@ -2402,13 +2975,20 @@ ins.chg .obj-img {
     padding-bottom: 10px;
   }
 
-  /* No gutter to put the overview, minimaps or line numbers on. */
+  /* No gutter to put the overview, minimaps or line numbers on, and no room for two columns. */
   .colhead.gut,
   .endcap,
+  .topcap,
   .overview,
+  #view,
   #btn-minimap,
-  #btn-lines {
+  #btn-lines,
+  #btn-bands {
     display: none;
+  }
+
+  .counter-m {
+    display: inline-flex;
   }
 
   .colhead.a .slot,

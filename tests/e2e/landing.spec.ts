@@ -33,7 +33,7 @@ test('the landing page asks for a file and leads to the sample', async ({ page }
   await expect(page.getByRole('heading', { name: 'Drop your first document here' })).toBeVisible();
   await page.getByRole('link', { name: 'See a sample comparison' }).first().click();
   await expect(page).toHaveURL(/\/compare\/sample\/$/);
-  await expect(page.locator('#counter')).toHaveText('Change 1 of 7');
+  await expect(page.locator('#counter .vh')).toHaveText('Change 1 of 7');
 });
 
 test('compares a file chosen on the landing page with another of the same kind', async ({ page }) => {
@@ -70,7 +70,7 @@ test('files dropped on the landing page start a comparison', async ({ page }) =>
   await dropFiles(page, [{ name: 'plan-v2.md', text: '# Plan\n\nWe launch on 19 May with eight pages.\n' }]);
   await expect(page).toHaveURL(/\/compare\/$/);
   await expect(page.locator('.slot-name')).toHaveText(['plan-v1.md', 'plan-v2.md']);
-  await expect(page.locator('#counter')).toHaveText('Change 1 of 1');
+  await expect(page.locator('#counter .vh')).toHaveText('Change 1 of 1');
 });
 
 test('two files dropped together go straight to the comparison', async ({ page }) => {

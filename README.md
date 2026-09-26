@@ -18,10 +18,14 @@ Compare two versions of a document side by side, see every difference down to th
   - Code, data and config files (`.json`, `.xml`, `.yaml`, `.tex`, `.py` and many more), compared line by line in a monospace font.
   - Files are recognized by their content, so a `.doc` that is really RTF or a web page still loads.
   - Drop two files at once and they load as A and B.
-- **Compare.** Paragraphs are lined up side by side, and rewritten paragraphs are paired with their counterpart instead of showing as removed and added. Inside a paragraph, words only in A are red, words only in B are green, and a caret marks where the other side has extra text. Formatting-only changes (bold, italic, link targets, heading level, list type, alignment) are flagged separately. Tables are compared row by row and cell by cell. Images, footnote text, fields and equations count too.
+- **Compare.** Rewritten paragraphs are paired with their counterpart instead of showing as removed and added. Inside a paragraph, words only in A are red, words only in B are green, and a caret marks where the other side has extra text. Formatting-only changes (bold, italic, link targets, heading level, list type, alignment) are flagged separately. Tables are compared row by row and cell by cell. Images, footnote text, fields and equations count too.
+- **Three ways to read the comparison.**
+  - *Side by side with connection bands* (the default): each document runs on unbroken in its own column, as in Meld or a JetBrains IDE. As the page scrolls, the columns slide against each other so that what is level with the middle of the screen matches, and a band across the gutter joins each change to the other side (a line marks where text is missing).
+  - *Side by side in rows* (connection bands off): paragraphs are lined up in rows, with a gap where one side has nothing.
+  - *Unified*: one column, with A's version above B's wherever they differ. On a phone it is the only view.
 - **Find your way.** The ruler between the columns has a mark for every change: click a mark to go to it, or drag its frame (the part of the documents on screen) to scroll. The minimap draws each document in miniature on either side of the ruler. The list of changes names every change with its words, and how many words are only in A (−) and only in B (+); click one to go there. Buttons step to the next or previous change or page, and are greyed out where there is nowhere to go. When A and B match, the toolbar turns green.
 - **Copy changes across**, in either direction:
-  - a whole paragraph (the arrows either side of the ruler);
+  - a whole paragraph (the arrows either side of the ruler; with connection bands, the arrows at the ends of a band copy the whole change);
   - a single word-level edit (click a highlighted word);
   - a single table row, or the whole table;
   - the current change (<kbd>Alt</kbd>+<kbd>→</kbd> / <kbd>Alt</kbd>+<kbd>←</kbd>);
@@ -54,11 +58,11 @@ Compare two versions of a document side by side, see every difference down to th
 
 The toolbar has three parts:
 
-- **Changes**, on the left: previous and next change, *Changes only* (which folds unchanged paragraphs away), the counter and the totals. Where the toolbar is short of room, the totals show just their numbers and the counter reads "1 / 7".
-- **View**, in the middle: the minimap, line numbers in the gutter (paragraph numbers, which for text and code files are their line numbers), *Compare* options, and *Previous page* / *Next page*.
+- **Changes**, on the left: previous and next change, *Changes only* (which folds unchanged paragraphs away), and the totals behind the ⓘ icon (hover or click it).
+- **View**, in the middle: side by side or unified, the minimap, line numbers in the gutter (paragraph numbers, which for text and code files are their line numbers), connection bands, *Compare* options, and *Previous page* / *Next page*.
 - **Editing**, on the right: undo, redo, *Copy changes* and the list of changes.
 
-View settings are remembered in the browser. In the app bar, the low contrast button drops the borders so the sheets and the desk share one colour, and the theme button switches between light and dark. The theme applies to every page and is remembered; picking the system's own theme again goes back to following the system. Notes about the documents (such as a PDF not being editable in place) can be dismissed.
+The counter ("3/7": the third of seven changes) sits between the column heads, above the ruler. View settings are remembered in the browser. In the app bar, the low contrast button drops the borders so the sheets and the desk share one colour, and the theme button switches between light and dark. The theme applies to every page and is remembered; picking the system's own theme again goes back to following the system. Notes about the documents (such as a PDF not being editable in place) can be dismissed.
 
 ### Keyboard
 
@@ -70,6 +74,8 @@ View settings are remembered in the browser. In the app bar, the low contrast bu
 | <kbd>Alt</kbd>+<kbd>←</kbd> | Use B's version of the current change in A |
 | <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd>, <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | Undo, redo |
 | <kbd>C</kbd> | Changes only |
+| <kbd>V</kbd> | Side by side / unified |
+| <kbd>B</kbd> | Connection bands |
 | <kbd>S</kbd> | List of changes |
 | <kbd>M</kbd> | Minimap |
 | <kbd>L</kbd> | Line numbers |
@@ -104,7 +110,7 @@ The site has four pages:
 - `/compare/` is the comparison workspace for the two documents chosen there; any two documents, in any mix of formats, can then be loaded in it. The documents are only kept in memory, so opened directly (or reloaded) it goes to `/compare/new/`.
 - `/compare/sample/` is the workspace with the sample drafts.
 
-`dist-single/collate.html` is the workspace on its own, starting with the sample drafts, built by Vite from `index.html` and `src/main.tsx`. It works when opened straight from disk, so you can share it as a single file (about 580 KB, React included). It loads [pdf.js](https://mozilla.github.io/pdf.js/) from jsDelivr the first time a PDF is opened, pinned to the installed version by an import map with integrity hashes; the regular build serves its own copy of pdf.js and loads it only when a PDF is opened. Both builds load pdfmake from jsDelivr (with a subresource integrity check) when a PDF is first saved.
+`dist-single/collate.html` is the workspace on its own, starting with the sample drafts, built by Vite from `index.html` and `src/main.tsx`. It works when opened straight from disk, so you can share it as a single file (about 600 KB, React included). It loads [pdf.js](https://mozilla.github.io/pdf.js/) from jsDelivr the first time a PDF is opened, pinned to the installed version by an import map with integrity hashes; the regular build serves its own copy of pdf.js and loads it only when a PDF is opened. Both builds load pdfmake from jsDelivr (with a subresource integrity check) when a PDF is first saved.
 
 ### GitHub Pages
 
@@ -154,10 +160,12 @@ src/
   ui/              the workspace, in React
     app.tsx        state (documents, undo, view settings) and actions; lays out the rest
     toolbar.tsx    app bar and toolbar
-    grid.tsx       the aligned rows, memoized by row, and keeping the reader's place
+    grid.tsx       the aligned rows (side by side or unified), memoized by row, and keeping the reader's place
+    elastic-grid.tsx  side by side with connection bands: each document in its own column
+    elastic.ts     lines those columns up as the page scrolls and draws the bands
     overview.tsx   ruler, minimaps and the frame that scrolls the documents
-    changes-panel.tsx, menus.tsx, dialogs.tsx, notices.tsx, heads.tsx, empty.tsx,
-    toasts.tsx, drop.tsx, tooltip.tsx
+    changes-panel.tsx, menus.tsx, dialogs.tsx, notices.tsx, heads.tsx, counter.tsx,
+    empty.tsx, toasts.tsx, drop.tsx, tooltip.tsx
     rows.ts        what each row shows (render.ts turns document text into HTML)
     layout.ts      measuring rows, scrolling to a change, keeping the reader's place
     changes.ts     what the list of changes says about each change
@@ -166,6 +174,7 @@ src/
 
 - **Comparison.** Each paragraph gets a signature from its style and tokens, and the two paragraph sequences are diffed with Myers' algorithm. Within each changed region, a small dynamic program pairs up paragraphs whose words overlap enough. Paired paragraphs are then diffed word by word. The cleanup step folds short common stretches into a single edit, so a rewritten phrase reads as one change.
 - **Merging.** A merge rebuilds the target's block list from the aligned rows. Paragraphs the comparison ignores, such as empty lines and bookmarks, stay where they are.
+- **Connection bands.** The page scrolls through the aligned layout, each line as tall as its taller side, so the scrollbar, the ruler and every jump work as they do with rows. At each scroll position, the line at the sync point (the middle of the screen, moving to the top and bottom at the ends of the documents) is found and each column is shifted so its side of that line is level with it. Between changes neither shift changes, so the page scrolls as it would without them.
 - **Word files.** Word documents keep their original XML. Copying a paragraph imports its XML into the other package and remaps relationship ids, media, styles (matched by name), numbering (so lists continue), footnotes, drawing ids and namespaces. A word-level copy rebuilds just that paragraph from pieces of both originals, keeping each piece's run formatting.
 - **OpenDocument files** work the same way: copied paragraphs are imported with their automatic and named styles, list styles, fonts and pictures, list numbering continues across copied items, and names that must be unique (tables, frames, sections, notes) are renewed.
 - **PDFs** are read with pdf.js. With structure tags, the tag tree gives paragraphs, headings, lists, tables, notes and the table of contents directly. Without them, text runs are grouped into lines and paragraphs by baseline, spacing, indentation and font size; list markers, table columns, footnotes and running headers and footers are detected from the layout.
