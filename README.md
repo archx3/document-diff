@@ -85,7 +85,7 @@ npm run build        # static site in dist/
 npm run build:single # one self-contained file: dist-single/collate.html
 ```
 
-`dist-single/collate.html` works when opened straight from disk, so you can share it as a single file. It includes [pdf.js](https://mozilla.github.io/pdf.js/) for reading PDFs; the regular build loads pdf.js only when a PDF is opened. Both builds load pdfmake from jsDelivr (with a subresource integrity check) when a PDF is first saved.
+`dist-single/collate.html` works when opened straight from disk, so you can share it as a single file (about 330 KB). It loads [pdf.js](https://mozilla.github.io/pdf.js/) from jsDelivr the first time a PDF is opened, pinned to the installed version by an import map with integrity hashes; the regular build serves its own copy of pdf.js and loads it only when a PDF is opened. Both builds load pdfmake from jsDelivr (with a subresource integrity check) when a PDF is first saved.
 
 ### GitHub Pages
 

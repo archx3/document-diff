@@ -12,14 +12,32 @@ import { OBJ_CHAR, blockText, newId, normalizeSpans, roleFromName } from '../../
 
 type PdfJs = typeof import('pdfjs-dist');
 
+/**
+ * pdf.js on jsDelivr. The single-file build loads it from there rather than
+ * carrying 1.7 MB of it; scripts/inline-build.mjs pins these files to the
+ * installed package with an import map's integrity hashes.
+ */
+export const PDFJS_CDN = {
+  lib: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/legacy/build/pdf.mjs',
+  worker: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/legacy/build/pdf.worker.mjs',
+  cmaps: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/cmaps/',
+};
+
 let lib: Promise<PdfJs> | null = null;
+
+function importPdfjs(): Promise<[unknown, unknown]> {
+  if (import.meta.env.MODE === 'single') return Promise.all([import(/* @vite-ignore */ PDFJS_CDN.lib), import(/* @vite-ignore */ PDFJS_CDN.worker)]);
+  return Promise.all([import('pdfjs-dist/legacy/build/pdf.mjs'), import('pdfjs-dist/legacy/build/pdf.worker.mjs')]);
+}
 
 /** Loads pdf.js on first use; it runs on the page's own thread (no worker file to host). */
 function loadPdfjs(): Promise<PdfJs> {
   lib ??= (async () => {
-    const [pdfjs, worker] = await Promise.all([import('pdfjs-dist/legacy/build/pdf.mjs'), import('pdfjs-dist/legacy/build/pdf.worker.mjs')]);
+    const [pdfjs, worker] = await importPdfjs().catch(() => {
+      throw new PdfUnavailableError('The PDF reader could not be loaded. The first PDF you open needs an internet connection.');
+    });
     (globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = worker;
-    return pdfjs as unknown as PdfJs;
+    return pdfjs as PdfJs;
   })();
   lib.catch(() => {
     lib = null;
@@ -28,6 +46,7 @@ function loadPdfjs(): Promise<PdfJs> {
 }
 
 export class PdfPasswordError extends Error {}
+export class PdfUnavailableError extends Error {}
 
 /* ------------------------------------------------------------------ items */
 
@@ -1082,7 +1101,7 @@ export async function readPdf(data: Uint8Array, name: string): Promise<Doc> {
     // Pictures are not compared: skip decoding them.
     maxImageSize: 1,
     verbosity: 0,
-    cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.3.289/cmaps/',
+    cMapUrl: PDFJS_CDN.cmaps,
     cMapPacked: true,
   });
   task.onPassword = () => {

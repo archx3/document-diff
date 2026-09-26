@@ -378,8 +378,9 @@ export async function renderPdf(pdfMake: PdfMake, doc: Doc): Promise<Uint8Array>
 
 /* ----------------------------------------------------------- in a browser */
 
-const CDN = 'https://cdn.jsdelivr.net/npm/pdfmake@0.3.11/build/';
-const SCRIPTS: Array<[string, string]> = [
+export const PDFMAKE_CDN = 'https://cdn.jsdelivr.net/npm/pdfmake@0.3.11/build/';
+/** pdfmake's files, with their subresource integrity hashes. */
+export const PDFMAKE_SCRIPTS: Array<[string, string]> = [
   ['pdfmake.min.js', 'sha384-vsaIaEjAOZA6uoCQ2pryCKIc8YGpQ/0HK5krdezL4PYvnmLzrizBMDJCZulvIomS'],
   ['vfs_fonts.js', 'sha384-pkBUW1wxcm6m7ZjKDxADnNHqnz+Sx9sAL1ndsLNv/GZnWZgodPYsju1yxeyQnn0c'],
   ['standard-fonts/Courier.js', 'sha384-C7OtgvR6B2TEB3r3NkimHHJZMXqKg7V6fSyzHucz1nFFEOR3uW/u/wLtP8Xg9E0A'],
@@ -401,7 +402,7 @@ function loadScript(src: string, integrity: string): Promise<void> {
 
 function loadPdfmake(): Promise<PdfMake> {
   loading ??= (async () => {
-    for (const [file, hash] of SCRIPTS) await loadScript(CDN + file, hash);
+    for (const [file, hash] of PDFMAKE_SCRIPTS) await loadScript(PDFMAKE_CDN + file, hash);
     const lib = (window as unknown as { pdfMake?: PdfMake }).pdfMake;
     if (!lib) throw new Error('The PDF maker did not start.');
     return lib;

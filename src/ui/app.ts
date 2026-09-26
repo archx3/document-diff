@@ -1241,7 +1241,7 @@ export class App {
           <h3>What is compared</h3>
           <p>The text of the document body: paragraphs, headings, lists, tables, links, images, footnote text and basic formatting. Headers, footers and comments are left as they are. A PDF stores laid-out text rather than paragraphs, so Collate rebuilds them; its pictures and page numbers can’t be matched to another format’s.</p>
           <h3>Privacy</h3>
-          <p>Documents are read and written inside this browser tab. Nothing is uploaded: saving a PDF downloads the PDF maker, but your document stays here.</p>
+          <p>Documents are read and written inside this browser tab. Nothing is uploaded. The first PDF you open or save may download a PDF library; your document stays here.</p>
         </section>
       </div>`,
       'help',

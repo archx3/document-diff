@@ -23,5 +23,6 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      # The browser tests also open the single-file build.
       - run: npm run build:single
+      - run: npm run test:e2e

@@ -158,11 +158,11 @@ export async function loadFile(file: Blob & { name: string }): Promise<Doc> {
   const { kind, detail } = sniff(bytes, ext);
   switch (kind) {
     case 'pdf': {
-      const { PdfPasswordError, readPdf } = await import('./pdf/read');
+      const { PdfPasswordError, PdfUnavailableError, readPdf } = await import('./pdf/read');
       try {
         return await readPdf(bytes, name);
       } catch (e) {
-        if (e instanceof PdfPasswordError) throw new LoadError(e.message);
+        if (e instanceof PdfPasswordError || e instanceof PdfUnavailableError) throw new LoadError(e.message);
         throw new LoadError(`"${name}" could not be read as a PDF. ${(e as Error).message}`);
       }
     }

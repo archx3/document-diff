@@ -1,9 +1,12 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { blockText } from '../../src/core/model';
 import { exportFormats } from '../../src/formats/export';
 import { LoadError, decodeBytes, loadFile, mhtmlToHtml, sniff } from '../../src/formats/load';
+import { PDFJS_CDN } from '../../src/formats/pdf/read';
+import { PDFMAKE_CDN, PDFMAKE_SCRIPTS } from '../../src/formats/pdf/write';
 
 const fixture = (name: string) => new Uint8Array(readFileSync(`tests/fixtures/${name}`));
 const file = (data: Uint8Array | string, name: string) => new File([data as BlobPart], name);
@@ -121,6 +124,17 @@ describe('export formats', () => {
         const out = await f.build(d);
         expect(out.length, `${name} as ${f.ext}`).toBeGreaterThan(50);
       }
+    }
+  });
+});
+
+describe('libraries loaded from jsDelivr', () => {
+  it('are the installed versions, with matching integrity hashes', () => {
+    const version = (pkg: string) => (JSON.parse(readFileSync(`node_modules/${pkg}/package.json`, 'utf8')) as { version: string }).version;
+    for (const url of Object.values(PDFJS_CDN)) expect(url).toContain(`/npm/pdfjs-dist@${version('pdfjs-dist')}/`);
+    expect(PDFMAKE_CDN).toBe(`https://cdn.jsdelivr.net/npm/pdfmake@${version('pdfmake')}/build/`);
+    for (const [file, hash] of PDFMAKE_SCRIPTS) {
+      expect(hash, file).toBe(`sha384-${createHash('sha384').update(readFileSync(`node_modules/pdfmake/build/${file}`)).digest('base64')}`);
     }
   });
 });

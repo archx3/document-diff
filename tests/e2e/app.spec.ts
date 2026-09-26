@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
 import { unzipSync } from 'fflate';
 import { expect, test } from '@playwright/test';
@@ -285,6 +285,28 @@ test('saves a document as PDF', async ({ page }) => {
   const num = (key: string) => Number(new RegExp(`/${key} (\\d+)`).exec(dict)![1]);
   const start = streamAt + 'stream\n'.length;
   expect(inflateSync(bytes.subarray(start, start + num('Length'))).length).toBe(num('Height') * (1 + num('Width') * 3));
+});
+
+test('the single-file build reads and saves PDFs with libraries from the CDN', async ({ page }) => {
+  test.skip(!existsSync('dist-single/collate.html'), 'run `npm run build:single` first');
+  // pdf.js and pdfmake come from jsDelivr; serve the installed packages instead (the import
+  // map's integrity hashes must match them).
+  const cdn: string[] = [];
+  await page.route('https://cdn.jsdelivr.net/npm/**', (route) => {
+    const [, pkg, file] = /\/npm\/(pdfjs-dist|pdfmake)@[^/]+\/(.+)$/.exec(route.request().url())!;
+    cdn.push(`${pkg}/${file}`);
+    return route.fulfill({ path: `node_modules/${pkg}/${file}`, headers: { 'access-control-allow-origin': '*', 'content-type': 'text/javascript' } });
+  });
+  await page.goto(`file://${process.cwd()}/dist-single/collate.html`);
+  await loadFile(page, 'a', 'tests/fixtures/contract-v2.pdf');
+  await loadFile(page, 'b', 'tests/fixtures/contract-v1.docx');
+  await expect(badges(page)).toHaveText(['PDF', 'Word']);
+  await expect(rowByText(page, 'Accessibility review')).toHaveClass(/k-del/);
+  await page.locator('.slot[data-side="b"] [data-menu="export"]').click();
+  const download = page.waitForEvent('download');
+  await page.locator('.pop [data-export="pdf"]').click();
+  expect((await download).suggestedFilename()).toBe('contract-v1.pdf');
+  expect(cdn).toEqual(expect.arrayContaining(['pdfjs-dist/legacy/build/pdf.mjs', 'pdfjs-dist/legacy/build/pdf.worker.mjs', 'pdfmake/build/pdfmake.min.js']));
 });
 
 test('explains files it cannot read', async ({ page }) => {

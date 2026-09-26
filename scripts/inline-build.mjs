@@ -1,7 +1,8 @@
 // Produces single-file builds from dist/ (run after `vite build`):
-//   dist-single/collate.html       a complete page that works offline from disk
+//   dist-single/collate.html       a complete page that works when opened from disk
 //   dist-single/collate.body.html  the same page without <html>/<head>/<body>,
 //                                  for hosts that wrap pages in their own skeleton
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -24,6 +25,17 @@ const scripts = [...(head + body).matchAll(JS_TAG)].map((m) => {
     .replace(/\/\/# sourceMappingURL=\S+\s*$/, '');
   return `<script type="module">\n${js}\n</script>`;
 });
+// The single-file build loads pdf.js from jsDelivr (see src/formats/pdf/read.ts). An import
+// map pins each of those files to the bytes of the installed package.
+const pdfjsVersion = JSON.parse(readFileSync('node_modules/pdfjs-dist/package.json', 'utf8')).version;
+const integrity = {};
+for (const js of scripts) {
+  for (const [url, version, file] of js.matchAll(/https:\/\/cdn\.jsdelivr\.net\/npm\/pdfjs-dist@([\w.-]+)\/([\w/.-]+\.mjs)/g)) {
+    if (version !== pdfjsVersion) throw new Error(`The page loads pdf.js ${version}, but ${pdfjsVersion} is installed`);
+    integrity[url] = `sha384-${createHash('sha384').update(readFileSync(join('node_modules/pdfjs-dist', file))).digest('base64')}`;
+  }
+}
+if (Object.keys(integrity).length) scripts.unshift(`<script type="importmap">\n${JSON.stringify({ integrity }, null, 2)}\n</script>`);
 const strip = (s) => s.replace(CSS_LINK, '').replace(JS_TAG, '').replace(PRELOAD, '');
 const headRest = strip(head).trim();
 const bodyRest = strip(body).trim();
