@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { inflateSync } from 'node:zlib';
 import { unzipSync } from 'fflate';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
@@ -160,7 +161,7 @@ test('compares a PDF with a Word file and copies from the PDF', async ({ page })
   await loadFile(page, 'a', 'tests/fixtures/contract-v2.pdf');
   await loadFile(page, 'b', 'tests/fixtures/contract-v1.docx');
   await expect(badges(page)).toHaveText(['PDF', 'Word']);
-  await expect(page.locator('.notice')).toContainText('PDFs are read only');
+  await expect(page.locator('.notice')).toContainText('PDFs can’t be edited in place');
   await expect(rowByText(page, 'Accessibility review')).toHaveClass(/k-del/);
 
   await page.locator('#btn-all').click();
@@ -250,6 +251,40 @@ test('prints one document for saving as PDF', async ({ page }) => {
   const printed = await page.evaluate(() => (window as unknown as { printed: string }).printed);
   expect(printed).toMatch(/\|.*\S/);
   await expect(page.locator('#print-root')).toHaveCount(0);
+});
+
+test('saves a document as PDF', async ({ page }) => {
+  // pdfmake comes from a CDN; serve the same files from node_modules so the test runs offline.
+  await page.route('https://cdn.jsdelivr.net/npm/pdfmake@0.3.11/build/**', (route) =>
+    route.fulfill({
+      path: `node_modules/pdfmake/build/${route.request().url().split('/build/')[1]}`,
+      headers: { 'access-control-allow-origin': '*', 'content-type': 'text/javascript' },
+    }),
+  );
+  await loadFile(page, 'a', 'tests/fixtures/contract-v1.docx');
+  await expect(page.locator('.dropcard[data-side="a"] h2')).toHaveText('contract-v1.docx');
+  await loadFile(page, 'b', 'tests/fixtures/contract-v2.docx');
+  await expect(page.locator('.slot[data-side="b"] .slot-name')).toHaveText('contract-v2.docx');
+  await page.locator('.slot[data-side="b"] [data-menu="export"]').click();
+  const download = page.waitForEvent('download');
+  await page.locator('.pop [data-export="pdf"]').click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe('contract-v2.pdf');
+  const path = `${OUT}/e2e-export.pdf`;
+  await file.saveAs(path);
+  const bytes = readFileSync(path);
+  expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+  await expect(page.locator('.toast').last()).toContainText('.pdf');
+  // The logo is embedded byte for byte: its PNG rows inflate to height × (1 + width × 3) bytes.
+  const pdf = bytes.toString('latin1');
+  const at = pdf.indexOf('/Subtype /Image');
+  expect(at).toBeGreaterThan(0);
+  const streamAt = pdf.indexOf('stream\n', at);
+  const dict = pdf.slice(at, streamAt);
+  expect(dict).toContain('/ColorSpace /DeviceRGB');
+  const num = (key: string) => Number(new RegExp(`/${key} (\\d+)`).exec(dict)![1]);
+  const start = streamAt + 'stream\n'.length;
+  expect(inflateSync(bytes.subarray(start, start + num('Length'))).length).toBe(num('Height') * (1 + num('Width') * 3));
 });
 
 test('explains files it cannot read', async ({ page }) => {

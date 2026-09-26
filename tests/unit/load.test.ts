@@ -104,7 +104,7 @@ describe('export formats', () => {
     expect(await first('a.fodt', fixture('contract-v1.fodt'))).toBe('fodt');
     expect(await first('a.rtf', fixture('contract-v1.rtf'))).toBe('rtf');
     expect(await first('a.doc', fixture('contract-v1.doc'))).toBe('docx');
-    expect(await first('a.pdf', fixture('contract-v1.pdf'))).toBe('docx');
+    expect(await first('a.pdf', fixture('contract-v1.pdf'))).toBe('pdf');
     expect(await first('a.csv', 'x,y\n1,2\n')).toBe('csv');
     expect(await first('a.tsv', 'x\ty\n1\t2\n')).toBe('tsv');
     expect(await first('a.yaml', 'a: 1\n')).toBe('yaml');
@@ -116,7 +116,9 @@ describe('export formats', () => {
     for (const name of ['contract-v1.docx', 'contract-v1.odt', 'contract-v1.pdf', 'contract-v1.epub', 'contract-v1.doc', 'contract-v1.rtf']) {
       const d = await loadFile(file(fixture(name), name));
       for (const f of exportFormats(d)) {
-        const out = f.build(d);
+        // PDFs are made by a library loaded in the browser; pdf-write.test.ts covers them.
+        if (f.id === 'pdf') continue;
+        const out = await f.build(d);
         expect(out.length, `${name} as ${f.ext}`).toBeGreaterThan(50);
       }
     }

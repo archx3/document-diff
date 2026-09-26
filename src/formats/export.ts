@@ -4,6 +4,7 @@ import { exportDocx } from './docx/writer';
 import { docToHtml, docToMarkdown, docToText } from './html/write';
 import { OdtPackage } from './odt/package';
 import { exportOdt } from './odt/writer';
+import { exportPdf } from './pdf/write';
 import { docToRtf } from './rtf/write';
 import { docToDelimited, docToPlainLines, textFormat } from './text/plain';
 
@@ -14,7 +15,7 @@ export interface ExportFormat {
   hint?: string;
   ext: string;
   mime: string;
-  build: (doc: Doc) => Uint8Array | string;
+  build: (doc: Doc) => Uint8Array | string | Promise<Uint8Array>;
 }
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -40,16 +41,19 @@ export function exportFormats(doc: Doc): ExportFormat[] {
     build: exportOdt,
   };
   const rtf: ExportFormat = { id: 'rtf', label: 'Rich Text', hint: 'Opens in almost any word processor', ext: 'rtf', mime: 'application/rtf', build: docToRtf };
+  const pdf: ExportFormat = { id: 'pdf', label: 'PDF', hint: 'For reading, printing and sharing', ext: 'pdf', mime: 'application/pdf', build: exportPdf };
   const html: ExportFormat = { id: 'html', label: 'Web page', ext: 'html', mime: 'text/html', build: docToHtml };
   const md: ExportFormat = { id: 'md', label: 'Markdown', ext: 'md', mime: 'text/markdown', build: docToMarkdown };
   const txt: ExportFormat = { id: 'txt', label: 'Plain text', ext: 'txt', mime: 'text/plain', build: (d) => (d.kind === 'text' ? docToPlainLines(d) : docToText(d)) };
   switch (doc.kind) {
     case 'odt':
-      return [odt, word, rtf, html, md, txt];
+      return [odt, word, pdf, rtf, html, md, txt];
     case 'rtf':
-      return [{ ...rtf, hint: 'Saved as a new Rich Text file' }, word, odt, html, md, txt];
+      return [{ ...rtf, hint: 'Saved as a new Rich Text file' }, word, pdf, odt, html, md, txt];
+    case 'pdf':
+      return [{ ...pdf, hint: 'Saved as a new PDF' }, word, odt, rtf, html, md, txt];
     case 'markdown':
-      return [md, word, odt, rtf, html, txt];
+      return [md, word, pdf, odt, rtf, html, txt];
     case 'csv': {
       const tab = doc.delimiter === '\t';
       const own: ExportFormat = {
@@ -60,16 +64,16 @@ export function exportFormats(doc: Doc): ExportFormat[] {
         mime: tab ? 'text/tab-separated-values' : 'text/csv',
         build: (d) => docToDelimited(d),
       };
-      return [own, word, odt, html, md, txt];
+      return [own, word, pdf, odt, html, md, txt];
     }
     case 'text': {
       const ext = doc.ext && doc.ext !== 'txt' && textFormat(doc.ext) ? doc.ext : 'txt';
-      if (ext === 'txt') return [txt, word, odt, rtf, html, md];
+      if (ext === 'txt') return [txt, word, pdf, odt, rtf, html, md];
       const own: ExportFormat = { id: 'native', label: `${doc.formatLabel ?? 'Text'} file`, hint: `Same format (.${ext})`, ext, mime: 'text/plain', build: docToPlainLines };
-      return [own, txt, word, odt, html, md];
+      return [own, txt, pdf, word, odt, html, md];
     }
     default:
-      return [word, odt, rtf, html, md, txt];
+      return [word, pdf, odt, rtf, html, md, txt];
   }
 }
 

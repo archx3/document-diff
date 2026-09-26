@@ -20,6 +20,11 @@ function hostDownloads(): Promise<DownloadsApi | null> {
   return downloads;
 }
 
+/** Whether the page is shown inside a viewer (which also rules out the print dialog). */
+export function hostedInViewer(): boolean {
+  return typeof (window as unknown as { claude?: ClaudeHost }).claude?.use === 'function';
+}
+
 /** Whether files are saved through a hosting viewer (which only accepts some file types). Best known answer now. */
 export function inViewer(): boolean {
   if (known === undefined) void hostDownloads();

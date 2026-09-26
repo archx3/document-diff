@@ -38,8 +38,11 @@ interface Item {
   w: number;
   size: number;
   bold: boolean;
+  /** Font weight from the font's name (400 regular, 700 bold …). */
+  weight: number;
   italic: boolean;
   mono: boolean;
+  rtl?: boolean;
   eol: boolean;
   href?: string;
   mcid?: string;
@@ -74,8 +77,10 @@ interface Geo {
 interface PdfBlockX {
   items: Item[];
   page?: number;
-  /** A footnote body: its label and text. */
-  note?: { label: string; text: string };
+  /** A footnote body (or an endnote, listed under a "Notes" heading): its label and text. */
+  note?: { label: string; text: string; end?: boolean };
+  /** The heading of a list of endnotes. */
+  notesHeading?: boolean;
 }
 
 function blockPdf(b: Block | undefined): PdfBlockX | undefined {
@@ -132,7 +137,7 @@ export async function readPage(page: PDFPageProxy, n: number): Promise<Page> {
   ]);
   // Real font names (bold, italic, monospace) are known once the page's drawing operators are loaded.
   await page.getOperatorList().catch(() => undefined);
-  const fonts = new Map<string, { bold: boolean; italic: boolean; mono: boolean }>();
+  const fonts = new Map<string, { bold: boolean; weight: number; italic: boolean; mono: boolean }>();
   const fontOf = (id: string) => {
     let f = fonts.get(id);
     if (f) return f;
@@ -144,7 +149,8 @@ export async function readPage(page: PDFPageProxy, n: number): Promise<Page> {
     }
     const family = tc.styles[id]?.fontFamily ?? '';
     f = {
-      bold: /bold|black|heavy|semibold|demibold|[-,]bd\b/i.test(name),
+      bold: false,
+      weight: weightOf(name),
       italic: /italic|oblique|[-,]it\b/i.test(name),
       mono: /mono|courier|consolas|menlo|inconsolata|code/i.test(name) || family === 'monospace',
     };
@@ -182,6 +188,7 @@ export async function readPage(page: PDFPageProxy, n: number): Promise<Page> {
       w: it.width,
       size,
       ...fontOf(it.fontName),
+      rtl: it.dir === 'rtl' || undefined,
       eol: it.hasEOL,
       mcid,
       tag,
@@ -190,6 +197,31 @@ export async function readPage(page: PDFPageProxy, n: number): Promise<Page> {
     items.push(...(it.str ? withLinks(item, links) : [item]));
   }
   return { n, width: vp.width, height: vp.height, items, tree: tree as StructTreeNode | null };
+}
+
+/** Weight of a font from its name ("ABCDEF+Roboto-Medium" → 500). */
+function weightOf(font: string): number {
+  const n = font.replace(/^[A-Z]{6}\+/, '').toLowerCase();
+  if (/thin|hairline/.test(n)) return 100;
+  if (/extralight|ultralight/.test(n)) return 200;
+  if (/semilight|demilight/.test(n)) return 350;
+  if (/light/.test(n)) return 300;
+  if (/extrabold|ultrabold|heavy/.test(n)) return 800;
+  if (/black/.test(n)) return 900;
+  if (/semibold|demibold|demi\b/.test(n)) return 600;
+  if (/bold|[-,]bd\b/.test(n)) return 700;
+  if (/medium/.test(n)) return 500;
+  return 400;
+}
+
+/** Marks text set heavier than the body text as bold (some writers use a medium weight for bold). */
+function markBold(items: Item[]): void {
+  const counts = new Map<number, number>();
+  for (const i of items) counts.set(i.weight, (counts.get(i.weight) ?? 0) + i.str.trim().length);
+  let body = 400;
+  let best = -1;
+  for (const [w, n] of counts) if (n > best) [body, best] = [w, n];
+  for (const i of items) i.bold = i.weight >= 500 && i.weight >= body + 100;
 }
 
 /* ------------------------------------------------------ paragraph text */
@@ -404,7 +436,7 @@ class TaggedReader {
         if (c.role === 'Artifact') continue;
         if (c.role === 'Figure') {
           const alt = (c as { alt?: string }).alt ?? '';
-          out.push({ str: '', x: 0, y: 0, w: 0, size: 0, bold: false, italic: false, mono: false, eol: false, artifact: false, figure: alt });
+          out.push({ str: '', x: 0, y: 0, w: 0, size: 0, bold: false, weight: 400, italic: false, mono: false, eol: false, artifact: false, figure: alt });
           continue;
         }
         this.collect(c, out);
@@ -612,36 +644,67 @@ interface Line {
 }
 
 export function linesOf(p: Page): Line[] {
-  const lines: Line[] = [];
-  let cur: Item[] = [];
-  const end = () => {
-    const real = cur.filter((i) => i.str.trim());
-    if (real.length) {
-      const size = dominantSize(real);
-      lines.push({
-        items: cur,
-        y: real.reduce((m, i) => (i.size >= size * 0.85 ? Math.min(m, i.y) : m), Infinity),
-        x0: Math.min(...real.map((i) => i.x)),
-        x1: Math.max(...real.map((i) => i.x + i.w)),
-        size,
-        page: p.n,
-        text: cur.map((i) => i.str).join('').trim(),
-      });
-    }
-    cur = [];
+  interface Draft {
+    items: Item[];
+    y: number;
+    size: number;
+    x0: number;
+    x1: number;
+  }
+  const drafts: Draft[] = [];
+  const close = (d: Draft, it: Item) => {
+    const small = it.size < d.size * 0.85 || d.size < it.size * 0.85;
+    return Math.abs(d.y - it.y) <= Math.max(d.size, it.size) * (small ? 0.6 : 0.3);
   };
   for (const it of p.items) {
     if (it.artifact) continue;
-    const last = cur.filter((i) => i.str.trim()).pop();
-    if (last && it.str.trim()) {
-      const similar = !(it.size < last.size * 0.85 || last.size < it.size * 0.85);
-      if (similar && Math.abs(it.y - last.y) > Math.max(last.size, it.size) * 0.5) end();
-      else if (it.x < last.x - last.size * 2 && Math.abs(it.y - last.y) > 1) end();
+    const last = drafts[drafts.length - 1];
+    if (!it.str.trim()) {
+      // Spaces and line ends belong to the line being written.
+      if (last) last.items.push(it);
+      continue;
     }
-    cur.push(it);
-    if (it.eol) end();
+    let target: Draft | undefined;
+    if (last && close(last, it)) target = last;
+    else {
+      // Some writers draw a line's list number after its text: find the line it belongs to.
+      for (let k = drafts.length - 2; k >= Math.max(0, drafts.length - 4) && !target; k--) {
+        const d = drafts[k]!;
+        if (close(d, it) && it.x + it.w <= d.x0 + it.size) target = d;
+      }
+    }
+    if (!target) {
+      target = { items: [], y: it.y, size: it.size, x0: it.x, x1: it.x + it.w };
+      drafts.push(target);
+    }
+    target.items.push(it);
+    target.x0 = Math.min(target.x0, it.x);
+    target.x1 = Math.max(target.x1, it.x + it.w);
+    if (it.size > target.size * 1.15) {
+      target.size = it.size;
+      target.y = it.y;
+    }
   }
-  end();
+  const lines: Line[] = [];
+  for (const d of drafts) {
+    const real = d.items.filter((i) => i.str.trim());
+    if (!real.length) continue;
+    const rtl = real.filter((i) => i.rtl).length > real.length / 2;
+    const items = d.items.slice().sort((a, b) => (rtl ? b.x - a.x : a.x - b.x) || 0);
+    // Keep line-end markers at the end.
+    const ends = items.filter((i) => !i.str && i.eol);
+    const ordered = [...items.filter((i) => i.str || !i.eol), ...ends];
+    const size = dominantSize(real);
+    lines.push({
+      items: ordered,
+      y: real.reduce((m, i) => (i.size >= size * 0.85 ? Math.min(m, i.y) : m), Infinity),
+      x0: Math.min(...real.map((i) => i.x)),
+      x1: Math.max(...real.map((i) => i.x + i.w)),
+      size,
+      page: p.n,
+      text: ordered.map((i) => i.str).join('').trim(),
+    });
+  }
   return lines;
 }
 
@@ -730,7 +793,11 @@ class LayoutReader {
       const b = bodyLines[i]!;
       if (a.page === b.page && a.y > b.y) gaps.push(Math.round((a.y - b.y) * 2) / 2);
     }
-    const leading = mode(gaps.filter((g) => g < base * 2.2)) || base * 1.2;
+    // Line spacing inside a paragraph: the smallest gap that recurs (larger ones are paragraph spacing).
+    const gapCounts = new Map<number, number>();
+    for (const g of gaps) if (g >= base * 0.9 && g < base * 3) gapCounts.set(g, (gapCounts.get(g) ?? 0) + 1);
+    const recurring = [...gapCounts].filter(([, n]) => n >= Math.max(2, gaps.length * 0.1)).map(([g]) => g);
+    const leading = recurring.length ? Math.min(...recurring) : mode(gaps.filter((g) => g < base * 2.2)) || base * 1.2;
     const headingSizes = [...new Set(lines.filter((l) => l.size >= base * 1.12).map((l) => Math.round(l.size * 2) / 2))].sort((a, b) => b - a);
     const markerX = lines.filter((l) => this.marker(l, false)).map((l) => l.x0);
     const listLeft = markerX.length ? Math.min(...markerX) : geo.left;
@@ -739,6 +806,7 @@ class LayoutReader {
     let curKind: 'p' | 'h' | 'li' = 'p';
     let listKey = newId('L');
     let lastWasList = false;
+    let inNotes = false;
     const flush = () => {
       if (!cur.length) return;
       const items = cur.flatMap((l) => l.items);
@@ -758,6 +826,17 @@ class LayoutReader {
         lastWasList = false;
       }
       const p = para(body, props, geo, cur[0]!.page);
+      // Numbered items under a "Notes" heading are endnotes.
+      const heading = /^(end)?notes$|^footnotes$/i.test(blockText(p).trim());
+      if (heading) (p.x as PdfBlockX).notesHeading = true;
+      if (inNotes && curKind === 'li' && props.list?.ordered) {
+        const m = this.marker(cur[0]!, false);
+        const num = m ? /\d+/.exec(m.label)?.[0] : undefined;
+        if (num) (p.x as PdfBlockX).note = { label: num, text: blockText(p).trim(), end: true };
+      } else if (!heading && curKind !== 'li') {
+        inNotes = false;
+      }
+      if (heading) inNotes = true;
       // A numbered paragraph at the foot of the page may be a footnote (it becomes one if a reference points at it).
       const h = geo.heights.get(cur[0]!.page) ?? 792;
       const note = /^(\d{1,3}|[*†‡§])\s*(\S.*)$/.exec(blockText(p));
@@ -799,7 +878,13 @@ class LayoutReader {
         const samePage = prev.page === l.page;
         const gap = prev.y - l.y;
         const full = prev.x1 > geo.right - base * 3;
-        if (samePage && (gap > leading * 1.3 || gap < 0)) start = true;
+        // The previous line stopped short although this line's first word would have fitted: a paragraph ended.
+        const first = l.items.find((i) => i.str.trim());
+        const word = first ? first.str.trim().split(/\s+/)[0]! : '';
+        const wordWidth = first && first.str.length ? (first.w * word.length) / first.str.length : 0;
+        const fits = prev.x1 + base * 0.3 + wordWidth < geo.right - 1 && !/[-‐\u00ad]$/.test(prev.text);
+        if (samePage && (gap > leading * 1.25 || gap < 0)) start = true;
+        else if (samePage && fits) start = true;
         else if (Math.abs(l.size - prev.size) > base * 0.1) start = true;
         else if (samePage && l.x0 > prev.x0 + base * 0.8 && cur.length > 1) start = true;
         else if (samePage && !full && SENTENCE_END.test(prev.text)) start = true;
@@ -944,7 +1029,7 @@ function attachNotes(blocks: Block[]): Block[] {
     for (let j = i - 1; j >= 0 && !done; j--) {
       const b = out[j]!;
       const bx = blockPdf(b);
-      if (b.type !== 'p' || bx?.note || (bx?.page !== undefined && nx.page !== undefined && bx.page < nx.page - 1)) continue;
+      if (b.type !== 'p' || bx?.note || (!nx.note.end && bx?.page !== undefined && nx.page !== undefined && bx.page < nx.page - 1)) continue;
       const k = b.spans.findIndex((s) => !s.obj && s.fmt.sup && s.text.trim() === label);
       if (k < 0) continue;
       const spans = [...b.spans];
@@ -958,7 +1043,8 @@ function attachNotes(blocks: Block[]): Block[] {
       done = true;
     }
   }
-  return out;
+  // A "Notes" heading whose notes all went back to their references goes too.
+  return out.filter((b, k) => !(blockPdf(b)?.notesHeading && !blockPdf(out[k + 1])?.note));
 }
 
 /** Geometry is not needed once the document is built (it holds every glyph position). */
@@ -1018,6 +1104,7 @@ export async function readPdf(data: Uint8Array, name: string): Promise<Doc> {
       page.cleanup();
     }
     const all = pages.flatMap((p) => p.items).filter((i) => !i.artifact);
+    markBold(all);
     const chars = all.reduce((n, i) => n + i.str.trim().length, 0);
     const geo = geometry(pages, all);
     const tagged = pages.some((p) => p.tree) && all.filter((i) => i.mcid).reduce((n, i) => n + i.str.trim().length, 0) >= chars * 0.8;
@@ -1037,7 +1124,7 @@ export async function readPdf(data: Uint8Array, name: string): Promise<Doc> {
     blocks = attachNotes(joinAcrossPages(blocks, geo));
     dropGeometry(blocks);
     if (!chars) notes.unshift('This PDF has no text layer (it is probably a scan), so there is nothing to compare.');
-    notes.push('PDFs are read only: export a merged result as Word, OpenDocument or another editable format.');
+    notes.push('PDFs can’t be edited in place: a merged result is saved as a new PDF, or as Word, OpenDocument or another editable format.');
     return { id: newId('d'), name, kind: 'pdf', blocks, version: 0, ext: 'pdf', formatLabel: 'PDF', notes };
   } finally {
     void task.destroy();

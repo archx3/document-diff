@@ -19,7 +19,7 @@ import { ACCEPTED_EXTENSIONS, LoadError, googleDocId, loadFile, loadPaste } from
 import { odtBackend } from '../formats/odt/backend';
 import { OdtPackage } from '../formats/odt/package';
 import { SAMPLE_A, SAMPLE_A_NAME, SAMPLE_B, SAMPLE_B_NAME } from '../samples/sample';
-import { copyRich, inViewer, saveFile, viewerReady } from './files';
+import { copyRich, hostedInViewer, inViewer, saveFile, viewerReady } from './files';
 import { GridView } from './grid';
 import { icons } from './icons';
 import { esc } from './render';
@@ -931,7 +931,7 @@ export class App {
         <div class="menu-title">${SIDE_NAME[side]}: ${esc(doc.name)}</div>
         ${item(own!, true)}
         <button type="button" class="mi" role="menuitem" data-export="copy" data-side="${side}">${icons.copy}<span>Copy formatted text</span><small>Paste into Google Docs or Word</small></button>
-        <button type="button" class="mi" role="menuitem" data-export="print" data-side="${side}">${icons.print}<span>Print or save as PDF</span></button>
+        ${hostedInViewer() ? '' : `<button type="button" class="mi" role="menuitem" data-export="print" data-side="${side}">${icons.print}<span>Print…</span></button>`}
         <div class="menu-sep"></div>
         <div class="menu-title">Download as</div>
         ${rest.map((f) => item(f, false)).join('')}
@@ -1070,7 +1070,13 @@ export class App {
       const fmt = exportFormats(doc).find((f) => f.id === format);
       if (!fmt) return;
       let name = `${base}.${fmt.ext}`;
-      const out = fmt.build(doc);
+      if (fmt.id === 'pdf') this.busy(true, 'Making the PDF…');
+      let out: Uint8Array | string;
+      try {
+        out = await fmt.build(doc);
+      } finally {
+        this.busy(false);
+      }
       let blob = new Blob([out as BlobPart], { type: fmt.mime });
       if ((await viewerReady()) && !VIEWER_EXTENSIONS.has(fmt.ext)) {
         // This viewer only saves some file types; the file travels inside a zip.
@@ -1119,7 +1125,7 @@ export class App {
     setTimeout(() => {
       if (opened) return;
       cleanup();
-      this.toast('Printing isn’t available in this viewer. Download the document (Word or web page) and print or save it as PDF from there.', { error: true });
+      this.toast('Printing isn’t available here. Download the document as PDF instead.', { error: true });
     }, 400);
   }
 
@@ -1216,10 +1222,10 @@ export class App {
           <h3>Copy changes</h3>
           <p>Use the arrows between the columns to copy a paragraph across: <span class="k">${icons.toB}</span> makes B use A’s version, <span class="k">${icons.toA}</span> makes A use B’s version. Click a highlighted word to copy just that edit. Tables can be copied row by row.</p>
           <h3>Get the result</h3>
-          <p><b>Export</b> saves a document in its own format first. Word (.docx) and OpenDocument (.odt) files keep their own styles, headers, footers and page setup, with only the copied paragraphs changed. Any document can also be saved as Word, OpenDocument, RTF, a web page, Markdown or plain text, or printed and saved as PDF.</p>
+          <p><b>Export</b> saves a document in its own format first. Word (.docx) and OpenDocument (.odt) files keep their own styles, headers, footers and page setup, with only the copied paragraphs changed. Any document can also be saved as Word, PDF, OpenDocument, RTF, a web page, Markdown or plain text. A PDF is laid out afresh on A4 pages; saving the first one loads the PDF maker, which needs an internet connection.</p>
           <p>For Google Docs, either upload the .docx to Drive and open it with Google Docs, or use <b>Copy formatted text</b> and paste over the document’s contents.</p>
           <h3>File types</h3>
-          <p>Word (.docx and older .doc), Google Docs, PDF, OpenDocument (.odt), RTF, EPUB, web pages, Markdown, CSV and plain text files, including code and data. PDFs, EPUBs and .doc files can be compared and copied from, and are saved in another format.</p>
+          <p>Word (.docx and older .doc), Google Docs, PDF, OpenDocument (.odt), RTF, EPUB, web pages, Markdown, CSV and plain text files, including code and data. PDFs, EPUBs and .doc files can be compared and copied from. A PDF is saved as a new PDF (or in another format); EPUB and .doc files are saved in another format.</p>
         </section>
         <section>
           <h3>Keyboard</h3>
@@ -1235,7 +1241,7 @@ export class App {
           <h3>What is compared</h3>
           <p>The text of the document body: paragraphs, headings, lists, tables, links, images, footnote text and basic formatting. Headers, footers and comments are left as they are. A PDF stores laid-out text rather than paragraphs, so Collate rebuilds them; its pictures and page numbers can’t be matched to another format’s.</p>
           <h3>Privacy</h3>
-          <p>Documents are read and written inside this browser tab. Nothing is uploaded.</p>
+          <p>Documents are read and written inside this browser tab. Nothing is uploaded: saving a PDF downloads the PDF maker, but your document stays here.</p>
         </section>
       </div>`,
       'help',
