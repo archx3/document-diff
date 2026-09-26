@@ -4,15 +4,34 @@ type DownloadsApi = { save(req: { filename: string; data: Blob | Uint8Array | st
 type ClaudeHost = { use?: (name: string) => Promise<unknown> };
 
 let downloads: Promise<DownloadsApi | null> | null = null;
+let known: boolean | undefined;
 
 function hostDownloads(): Promise<DownloadsApi | null> {
   const claude = (window as unknown as { claude?: ClaudeHost }).claude;
   if (!claude?.use) return Promise.resolve(null);
-  downloads ??= claude.use('downloads').then((d) => (d as DownloadsApi | null) ?? null).catch(() => null);
+  downloads ??= claude
+    .use('downloads')
+    .then((d) => (d as DownloadsApi | null) ?? null)
+    .catch(() => null)
+    .then((d) => {
+      known = !!d;
+      return d;
+    });
   return downloads;
 }
 
-export type SaveOutcome = 'saved' | 'declined' | 'failed';
+/** Whether files are saved through a hosting viewer (which only accepts some file types). Best known answer now. */
+export function inViewer(): boolean {
+  if (known === undefined) void hostDownloads();
+  return !!known;
+}
+
+/** Resolves once it is known whether a hosting viewer saves files. */
+export async function viewerReady(): Promise<boolean> {
+  return !!(await hostDownloads());
+}
+
+export type SaveOutcome = 'saved' | 'declined' | 'unsupported' | 'busy' | 'failed';
 
 export async function saveFile(filename: string, data: Blob): Promise<SaveOutcome> {
   const host = await hostDownloads();
@@ -22,7 +41,10 @@ export async function saveFile(filename: string, data: Blob): Promise<SaveOutcom
       return 'saved';
     } catch (e) {
       const code = (e as { code?: string }).code;
-      return code === 'declined' ? 'declined' : 'failed';
+      if (code === 'declined') return 'declined';
+      if (code === 'rejected_extension' || code === 'extension_not_enabled') return 'unsupported';
+      if (code === 'rate_limited') return 'busy';
+      return 'failed';
     }
   }
   try {

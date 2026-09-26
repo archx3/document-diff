@@ -5,7 +5,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const dist = 'dist';
+const dist = process.argv[2] ?? 'dist';
 const out = 'dist-single';
 const page = readFileSync(join(dist, 'index.html'), 'utf8');
 const asset = (href) => readFileSync(join(dist, href.replace(/^\.?\//, '')), 'utf8');

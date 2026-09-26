@@ -1,6 +1,6 @@
 # Collate
 
-Compare two versions of a Word or Google Docs document side by side, see every difference down to the word, and copy changes from one version to the other. Collate runs entirely in your browser. Documents are never uploaded.
+Compare two versions of a document side by side, see every difference down to the word, and copy changes from one version to the other. Word, Google Docs, PDF, OpenDocument, RTF, EPUB, web pages, Markdown, CSV and plain-text files all work, and the two versions don't have to be in the same format. Collate runs entirely in your browser. Documents are never uploaded.
 
 ![Two drafts of an agreement compared side by side, with changed words highlighted and arrows between the columns for copying changes](docs/screenshot.png)
 
@@ -10,7 +10,13 @@ Compare two versions of a Word or Google Docs document side by side, see every d
   - Word files (`.docx`). This is also the best way in for Google Docs: *File › Download › Microsoft Word (.docx)*.
   - Rich text pasted straight from Google Docs or Word, with headings, lists, tables, bold, italic and links kept.
   - A Google Docs link: Collate builds the `.docx` download link for you, and private documents work because the download uses your own Google sign-in.
-  - `.html`, `.md` and `.txt` files.
+  - OpenDocument text (`.odt`, and flat `.fodt`) from LibreOffice, Collabora or OnlyOffice.
+  - PDF. A PDF stores laid-out text rather than paragraphs, so Collate rebuilds the document: from the PDF's structure tags when it has them (Word, LibreOffice and most modern tools write them), otherwise from the layout of each page. Headings, lists, tables, links, footnotes and tables of contents come back, and running headers, footers and page numbers are left out.
+  - Rich Text (`.rtf`), old Word 97–2003 files (`.doc`) and EPUB books.
+  - Web pages (`.html`, `.mht`), Markdown and plain text.
+  - CSV and TSV files, compared row by row as tables.
+  - Code, data and config files (`.json`, `.xml`, `.yaml`, `.tex`, `.py` and many more), compared line by line in a monospace font.
+  - Files are recognized by their content, so a `.doc` that is really RTF or a web page still loads.
   - Drop two files at once and they load as A and B.
 - **Compare.** Paragraphs are lined up side by side, and rewritten paragraphs are paired with their counterpart instead of showing as removed and added. Inside a paragraph, words only in A are red, words only in B are green, and a caret marks where the other side has extra text. Formatting-only changes (bold, italic, link targets, heading level, list type, alignment) are flagged separately. Tables are compared row by row and cell by cell. Images, footnote text, fields and equations count too.
 - **Copy changes across**, in either direction:
@@ -21,10 +27,12 @@ Compare two versions of a Word or Google Docs document side by side, see every d
   - everything (*Copy all › Make B match A*).
 
   Every copy can be undone and redone.
-- **Get the result out** (*Export* on either side):
-  - **Download Word document.** When the side was loaded from a `.docx`, the original file is kept and only the copied paragraphs change. Styles, headers, footers, page setup, comments, bookmarks and content controls all stay. Copied content brings its images, links, styles, list numbering and footnotes with it.
+- **Get the result out** (*Export* on either side). A document is offered in its own format first:
+  - **Word** and **OpenDocument**: when the side was loaded from a `.docx` or `.odt`, the original file is kept and only the copied paragraphs change. Styles, headers, footers, page setup, comments, bookmarks and content controls all stay. Copied content brings its images, links, styles, list numbering and footnotes with it, even between Word and OpenDocument files.
+  - **CSV/TSV** and code or data files are saved in their own format, with their separator and line endings.
+  - Any document can also be saved as a new Word, OpenDocument or RTF file, a web page, Markdown or plain text. PDF, EPUB and `.doc` files are read only, so they are saved in one of these formats.
+  - **Print or save as PDF** prints just that document, cleanly laid out; choose *Save as PDF* in the print dialog.
   - **Copy formatted text**, to paste into Google Docs or Word.
-  - HTML, Markdown or plain text.
 
 ### Round trip with Google Docs
 
@@ -60,8 +68,10 @@ Compare two versions of a Word or Google Docs document side by side, see every d
 - The document body is compared: paragraphs, headings, lists, tables (including nested ones), links, images, footnote and endnote text, fields and equations. Headers, footers and comments are not compared, and they stay in the exported file.
 - Tracked changes are compared as if they were all accepted. They are kept as they are when you export.
 - A paragraph that moved shows as removed in one place and added in another.
-- Old `.doc`, `.odt`, `.rtf` and PDF files aren't read. Save them as `.docx` first.
+- Page numbers and dates inserted as fields compare by what they are, not by the number they happen to show.
+- PDFs: pictures can't be matched with another format's (a PDF doesn't keep the original image file), a page number is plain text there, and a PDF that is only a scan has no text to compare. Password-protected PDFs and DRM-protected EPUBs can't be read.
 - The Google Docs link option can't fetch the document by itself, because browsers block that. It gives you a one-click download instead.
+- Apple Pages, WordPerfect and spreadsheet files aren't read; save them as Word or PDF first.
 
 ## Running it
 
@@ -74,7 +84,7 @@ npm run build        # static site in dist/
 npm run build:single # one self-contained file: dist-single/collate.html
 ```
 
-`dist-single/collate.html` works when opened straight from disk, so you can share it as a single file.
+`dist-single/collate.html` works when opened straight from disk, so you can share it as a single file. It includes [pdf.js](https://mozilla.github.io/pdf.js/) for reading PDFs; the regular build loads pdf.js only when a PDF is opened.
 
 ### GitHub Pages
 
@@ -90,7 +100,9 @@ npm run typecheck
 
 The Word tests merge real `.docx` fixtures in both directions. They check every result for structural problems Word is strict about: relationships, content types, unique drawing ids, numbering order, and comment and footnote references. They then open the file with [python-docx](https://python-docx.readthedocs.io/) (`pip install python-docx`) and, when it is installed, convert it with LibreOffice.
 
-Fixtures are generated by `python3 scripts/make_fixtures.py`. `python3 scripts/make_large_fixture.py tests/fixtures/out` generates two 3,000-paragraph documents for the opt-in benchmark in `tests/unit/perf.bench.test.ts`.
+The OpenDocument tests do the same for `.odt` files (manifest, stored `mimetype` entry, style references, unique names) and open every result with LibreOffice. The PDF, RTF, `.doc` and EPUB readers are checked against the Word originals they were converted from: apart from what a format can't carry, they must read the same.
+
+Fixtures are generated by `python3 scripts/make_fixtures.py`, which also runs `scripts/convert_fixtures.py` to convert them with LibreOffice into the other formats. `python3 scripts/make_large_fixture.py tests/fixtures/out` generates two 3,000-paragraph documents for the opt-in benchmark in `tests/unit/perf.bench.test.ts`.
 
 ## How it works
 
@@ -105,12 +117,21 @@ src/
     compare.ts     aligned rows, table row diffs, hunks, stats
     merge.ts       applies a selection of changes in one direction
   formats/
+    load.ts        recognizes files by content and picks a reader
+    export.ts      the formats each document can be saved in
     docx/          .docx reader, writer and merge backend
+    odt/           OpenDocument reader, writer and merge backend
+    rtf/           RTF reader and writer
+    doc/           Word 97–2003 reader (compound file + Word binary format)
+    pdf/           PDF reader (pdf.js + structure tags or layout analysis)
+    epub/          EPUB reader
     html/          pasted/HTML reader, HTML/Markdown/text export
-    text/          Markdown and plain-text readers
+    text/          Markdown, plain-text, CSV/TSV readers and writers
   ui/              app shell, aligned grid, rendering
 ```
 
 - **Comparison.** Each paragraph gets a signature from its style and tokens, and the two paragraph sequences are diffed with Myers' algorithm. Within each changed region, a small dynamic program pairs up paragraphs whose words overlap enough. Paired paragraphs are then diffed word by word. The cleanup step folds short common stretches into a single edit, so a rewritten phrase reads as one change.
 - **Merging.** A merge rebuilds the target's block list from the aligned rows. Paragraphs the comparison ignores, such as empty lines and bookmarks, stay where they are.
 - **Word files.** Word documents keep their original XML. Copying a paragraph imports its XML into the other package and remaps relationship ids, media, styles (matched by name), numbering (so lists continue), footnotes, drawing ids and namespaces. A word-level copy rebuilds just that paragraph from pieces of both originals, keeping each piece's run formatting.
+- **OpenDocument files** work the same way: copied paragraphs are imported with their automatic and named styles, list styles, fonts and pictures, list numbering continues across copied items, and names that must be unique (tables, frames, sections, notes) are renewed.
+- **PDFs** are read with pdf.js. With structure tags, the tag tree gives paragraphs, headings, lists, tables, notes and the table of contents directly. Without them, text runs are grouped into lines and paragraphs by baseline, spacing, indentation and font size; list markers, table columns, footnotes and running headers and footers are detected from the layout.

@@ -1,5 +1,4 @@
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { compareDocs } from '../../src/core/compare';
 import type { Comparison } from '../../src/core/compare';
@@ -13,6 +12,7 @@ import { readDocx } from '../../src/formats/docx/read';
 import { readHtml } from '../../src/formats/html/read';
 import { readRtf, tokenize } from '../../src/formats/rtf/read';
 import { docToRtf, rtfEscape } from '../../src/formats/rtf/write';
+import { libreOfficeText as convert } from '../soffice';
 
 const O = DEFAULT_OPTIONS;
 const OUT = 'tests/fixtures/out';
@@ -26,15 +26,7 @@ const diffs = (cmp: Comparison) =>
 const texts = (d: Doc) => d.blocks.filter((b) => b.type !== 'marker').map(blockText);
 
 function libreOfficeText(bytes: Uint8Array, name: string): string | null {
-  try {
-    execFileSync('soffice', ['--version'], { stdio: 'pipe', timeout: 60000 });
-  } catch {
-    return null;
-  }
-  const path = `${OUT}/${name}`;
-  writeFileSync(path, bytes);
-  execFileSync('soffice', ['--headless', '--convert-to', 'txt:Text', '--outdir', OUT, path], { stdio: 'pipe', timeout: 120000 });
-  return readFileSync(path.replace(/\.rtf$/, '.txt'), 'utf8');
+  return convert(bytes, OUT, name);
 }
 
 describe('RTF reading', () => {

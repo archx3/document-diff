@@ -1807,3 +1807,83 @@ ins.chg .obj-img {
     scroll-behavior: auto !important;
   }
 }
+
+.mi .ext {
+  margin-left: 4px;
+  color: var(--ink-3);
+  font: 12px var(--font-mono);
+}
+
+/* Printing one document ("Print or save as PDF"). */
+#print-root {
+  display: none;
+}
+
+@media print {
+  html.printing,
+  html.printing body {
+    background: #fff !important;
+    color: #000;
+  }
+  html.printing body > *:not(#print-root) {
+    display: none !important;
+  }
+  html.printing #print-root {
+    display: block;
+  }
+  .print-doc {
+    font: 11pt/1.45 var(--font-doc);
+    color: #000;
+  }
+  .print-doc h1,
+  .print-doc h2,
+  .print-doc h3,
+  .print-doc h4,
+  .print-doc h5,
+  .print-doc h6 {
+    font-family: var(--font-ui);
+    line-height: 1.25;
+    margin: 1.1em 0 0.4em;
+    break-after: avoid;
+  }
+  .print-doc h1 {
+    font-size: 18pt;
+  }
+  .print-doc h2 {
+    font-size: 14pt;
+  }
+  .print-doc h3 {
+    font-size: 12pt;
+  }
+  .print-doc p,
+  .print-doc li {
+    margin: 0 0 0.5em;
+    orphans: 2;
+    widows: 2;
+  }
+  .print-doc table {
+    border-collapse: collapse;
+    margin: 0.5em 0 1em;
+    break-inside: auto;
+  }
+  .print-doc td,
+  .print-doc th {
+    border: 0.75pt solid #555;
+    padding: 3pt 6pt;
+    vertical-align: top;
+  }
+  .print-doc tr {
+    break-inside: avoid;
+  }
+  .print-doc img {
+    max-width: 100%;
+  }
+  .print-doc pre,
+  .print-doc code {
+    font-family: var(--font-mono);
+    font-size: 9.5pt;
+  }
+  .print-doc a {
+    color: inherit;
+  }
+}

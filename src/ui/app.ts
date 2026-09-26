@@ -8,14 +8,18 @@ import { isBlank, wordCount } from '../core/model';
 import { modelBackend } from '../core/model-backend';
 import type { CompareOptions } from '../core/tokens';
 import { DEFAULT_OPTIONS } from '../core/tokens';
+import { zipSync } from 'fflate';
 import { docxBackend } from '../formats/docx/backend';
 import { DocxPackage } from '../formats/docx/package';
-import { exportDocx } from '../formats/docx/writer';
+import { VIEWER_EXTENSIONS, exportFormats } from '../formats/export';
+import type { ExportFormat } from '../formats/export';
 import { readHtml } from '../formats/html/read';
-import { blocksToHtml, docToHtml, docToMarkdown, docToText } from '../formats/html/write';
-import { LoadError, googleDocId, loadFile, loadPaste } from '../formats/load';
+import { blocksToHtml, docToText } from '../formats/html/write';
+import { ACCEPTED_EXTENSIONS, LoadError, googleDocId, loadFile, loadPaste } from '../formats/load';
+import { odtBackend } from '../formats/odt/backend';
+import { OdtPackage } from '../formats/odt/package';
 import { SAMPLE_A, SAMPLE_A_NAME, SAMPLE_B, SAMPLE_B_NAME } from '../samples/sample';
-import { copyRich, saveFile } from './files';
+import { copyRich, inViewer, saveFile, viewerReady } from './files';
 import { GridView } from './grid';
 import { icons } from './icons';
 import { esc } from './render';
@@ -30,7 +34,7 @@ interface Snapshot {
 }
 
 const PREFS_KEY = 'collate.prefs.v1';
-const ACCEPT = '.docx,.docm,.dotx,.html,.htm,.md,.markdown,.txt,.gdoc,.doc,.odt,.pdf,.rtf';
+const ACCEPT = ACCEPTED_EXTENSIONS.map((e) => `.${e}`).join(',');
 const SIDE_NAME: Record<Side, string> = { a: 'A', b: 'B' };
 const other = (s: Side): Side => (s === 'a' ? 'b' : 'a');
 
@@ -67,7 +71,7 @@ function plural(n: number, one: string, many = one + 's'): string {
 }
 
 function baseName(doc: Doc): string {
-  return doc.name.replace(/\.(docx|docm|dotx|html?|md|markdown|txt)$/i, '').trim() || 'document';
+  return doc.name.replace(/\.[a-z0-9]{1,8}$/i, '').trim() || 'document';
 }
 
 function reducedMotion(): boolean {
@@ -665,13 +669,13 @@ export class App {
       return `<section class="dropcard" data-side="${side}">
         <span class="siglum big" aria-hidden="true">${SIDE_NAME[side]}</span>
         <h2>${title}</h2>
-        <p>Drop a Word file here, or</p>
+        <p>Drop a document here, or</p>
         <div class="dc-actions">
           <button type="button" class="btn primary" data-load="file" data-side="${side}">${icons.open}<span>Choose file</span></button>
           <button type="button" class="btn" data-load="paste" data-side="${side}">${icons.paste}<span>Paste text</span></button>
           <button type="button" class="btn" data-load="gdoc" data-side="${side}">${icons.link}<span>Google Doc</span></button>
         </div>
-        <p class="hint">.docx, .html, .md or .txt</p>
+        <p class="hint">Word, Google Docs, PDF, OpenDocument, RTF, EPUB, HTML, Markdown, CSV or text</p>
       </section>`;
     };
     this.el.empty.innerHTML = `<div class="empty-inner">
@@ -783,7 +787,7 @@ export class App {
     if (!cmp || !this.a || !this.b) return;
     const side: Side = dir === 'l2r' ? 'b' : 'a';
     const target = this.getDoc(side)!;
-    const backend = target.pkg instanceof DocxPackage ? docxBackend : modelBackend;
+    const backend = target.pkg instanceof DocxPackage ? docxBackend : target.pkg instanceof OdtPackage ? odtBackend : modelBackend;
     let res;
     try {
       res = applySelection(cmp, dir, sel, backend);
@@ -904,7 +908,7 @@ export class App {
     this.openPop(
       anchor,
       `<div class="menu" role="menu" aria-label="Load ${SIDE_NAME[side]}">
-        <button type="button" class="mi" role="menuitem" data-load="file" data-side="${side}">${icons.open}<span>Open a file…</span><small>.docx .html .md .txt</small></button>
+        <button type="button" class="mi" role="menuitem" data-load="file" data-side="${side}">${icons.open}<span>Open a file…</span><small>Word, PDF, OpenDocument, RTF, EPUB, HTML, Markdown, CSV, text</small></button>
         <button type="button" class="mi" role="menuitem" data-load="paste" data-side="${side}">${icons.paste}<span>Paste from Google Docs or Word…</span></button>
         <button type="button" class="mi" role="menuitem" data-load="gdoc" data-side="${side}">${icons.link}<span>Google Docs link…</span></button>
       </div>`,
@@ -914,17 +918,23 @@ export class App {
   private openExportMenu(anchor: HTMLElement, side: Side): void {
     const doc = this.getDoc(side);
     if (!doc) return;
-    const keeps = doc.pkg instanceof DocxPackage ? 'Keeps the original styles, headers and layout' : 'A new Word file';
+    const viewer = inViewer();
+    const item = (f: ExportFormat, first: boolean) => {
+      const zipped = viewer && !VIEWER_EXTENSIONS.has(f.ext);
+      const hint = zipped ? 'Saved inside a .zip here (this viewer only saves some file types)' : (f.hint ?? '');
+      return `<button type="button" class="mi" role="menuitem" data-export="${f.id}" data-side="${side}">${first ? icons.download : icons.doc}<span>${esc(f.label)} <span class="ext">.${f.ext}${zipped ? '.zip' : ''}</span></span>${hint ? `<small>${esc(hint)}</small>` : ''}</button>`;
+    };
+    const [own, ...rest] = exportFormats(doc);
     this.openPop(
       anchor,
       `<div class="menu" role="menu" aria-label="Export ${SIDE_NAME[side]}">
         <div class="menu-title">${SIDE_NAME[side]}: ${esc(doc.name)}</div>
-        <button type="button" class="mi" role="menuitem" data-export="docx" data-side="${side}">${icons.download}<span>Download Word document</span><small>${keeps}</small></button>
+        ${item(own!, true)}
         <button type="button" class="mi" role="menuitem" data-export="copy" data-side="${side}">${icons.copy}<span>Copy formatted text</span><small>Paste into Google Docs or Word</small></button>
+        <button type="button" class="mi" role="menuitem" data-export="print" data-side="${side}">${icons.print}<span>Print or save as PDF</span></button>
         <div class="menu-sep"></div>
-        <button type="button" class="mi" role="menuitem" data-export="html" data-side="${side}">${icons.doc}<span>Download HTML</span></button>
-        <button type="button" class="mi" role="menuitem" data-export="md" data-side="${side}">${icons.doc}<span>Download Markdown</span></button>
-        <button type="button" class="mi" role="menuitem" data-export="txt" data-side="${side}">${icons.doc}<span>Download plain text</span></button>
+        <div class="menu-title">Download as</div>
+        ${rest.map((f) => item(f, false)).join('')}
       </div>`,
     );
   }
@@ -1053,32 +1063,64 @@ export class App {
         else this.toast('The clipboard is not available here. Use Download instead.', { error: true });
         return;
       }
-      let blob: Blob;
-      let name: string;
-      switch (format) {
-        case 'docx':
-          blob = new Blob([exportDocx(doc) as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-          name = `${base}.docx`;
-          break;
-        case 'html':
-          blob = new Blob([docToHtml(doc)], { type: 'text/html' });
-          name = `${base}.html`;
-          break;
-        case 'md':
-          blob = new Blob([docToMarkdown(doc)], { type: 'text/markdown' });
-          name = `${base}.md`;
-          break;
-        default:
-          blob = new Blob([docToText(doc)], { type: 'text/plain' });
-          name = `${base}.txt`;
+      if (format === 'print') {
+        this.print(doc, base);
+        return;
       }
-      const out = await saveFile(name, blob);
-      if (out === 'saved') this.toast(`Downloaded “${name}”`);
-      else if (out === 'failed') this.toast('The file could not be saved from this page.', { error: true });
+      const fmt = exportFormats(doc).find((f) => f.id === format);
+      if (!fmt) return;
+      let name = `${base}.${fmt.ext}`;
+      const out = fmt.build(doc);
+      let blob = new Blob([out as BlobPart], { type: fmt.mime });
+      if ((await viewerReady()) && !VIEWER_EXTENSIONS.has(fmt.ext)) {
+        // This viewer only saves some file types; the file travels inside a zip.
+        const bytes = typeof out === 'string' ? new TextEncoder().encode(out) : out;
+        blob = new Blob([zipSync({ [name]: [bytes, { level: 6 }] }) as BlobPart], { type: 'application/zip' });
+        name += '.zip';
+      }
+      const res = await saveFile(name, blob);
+      if (res === 'saved') this.toast(`Downloaded “${name}”`);
+      else if (res === 'unsupported') this.toast(`This viewer can’t save .${name.split('.').pop()} files. Choose another format.`, { error: true });
+      else if (res === 'busy') this.toast('A save is already waiting for your answer.', { error: true });
+      else if (res === 'failed') this.toast('The file could not be saved from this page.', { error: true });
     } catch (err) {
       console.error(err);
       this.toast(`Export failed: ${(err as Error).message}`, { error: true });
     }
+  }
+
+  /** Prints one document on its own (the print dialog can also save it as PDF). */
+  private print(doc: Doc, title: string): void {
+    const root = document.createElement('div');
+    root.id = 'print-root';
+    root.innerHTML = `<article class="print-doc">${blocksToHtml(doc.blocks)}</article>`;
+    document.body.appendChild(root);
+    const oldTitle = document.title;
+    document.title = title;
+    document.documentElement.classList.add('printing');
+    let opened = false;
+    const before = () => {
+      opened = true;
+    };
+    const cleanup = () => {
+      root.remove();
+      document.title = oldTitle;
+      document.documentElement.classList.remove('printing');
+      window.removeEventListener('beforeprint', before);
+    };
+    window.addEventListener('beforeprint', before);
+    window.addEventListener('afterprint', cleanup, { once: true });
+    try {
+      window.print();
+    } catch {
+      /* blocked */
+    }
+    // A page shown inside a viewer may not be allowed to open the print dialog.
+    setTimeout(() => {
+      if (opened) return;
+      cleanup();
+      this.toast('Printing isn’t available in this viewer. Download the document (Word or web page) and print or save it as PDF from there.', { error: true });
+    }, 400);
   }
 
   /* ----------------------------------------------------------- dialogs */
@@ -1174,8 +1216,10 @@ export class App {
           <h3>Copy changes</h3>
           <p>Use the arrows between the columns to copy a paragraph across: <span class="k">${icons.toB}</span> makes B use A’s version, <span class="k">${icons.toA}</span> makes A use B’s version. Click a highlighted word to copy just that edit. Tables can be copied row by row.</p>
           <h3>Get the result</h3>
-          <p><b>Export › Download Word document</b> saves a .docx. If you loaded a .docx, the file keeps its own styles, headers, footers and page setup, with only the copied paragraphs changed.</p>
-          <p>For Google Docs, either upload that .docx to Drive and open it with Google Docs, or use <b>Copy formatted text</b> and paste over the document’s contents.</p>
+          <p><b>Export</b> saves a document in its own format first. Word (.docx) and OpenDocument (.odt) files keep their own styles, headers, footers and page setup, with only the copied paragraphs changed. Any document can also be saved as Word, OpenDocument, RTF, a web page, Markdown or plain text, or printed and saved as PDF.</p>
+          <p>For Google Docs, either upload the .docx to Drive and open it with Google Docs, or use <b>Copy formatted text</b> and paste over the document’s contents.</p>
+          <h3>File types</h3>
+          <p>Word (.docx and older .doc), Google Docs, PDF, OpenDocument (.odt), RTF, EPUB, web pages, Markdown, CSV and plain text files, including code and data. PDFs, EPUBs and .doc files can be compared and copied from, and are saved in another format.</p>
         </section>
         <section>
           <h3>Keyboard</h3>
@@ -1189,7 +1233,7 @@ export class App {
             <dt><kbd>?</kbd></dt><dd>This help</dd>
           </dl>
           <h3>What is compared</h3>
-          <p>The text of the document body: paragraphs, headings, lists, tables, links, images, footnote text and basic formatting. Headers, footers and comments are left as they are.</p>
+          <p>The text of the document body: paragraphs, headings, lists, tables, links, images, footnote text and basic formatting. Headers, footers and comments are left as they are. A PDF stores laid-out text rather than paragraphs, so Collate rebuilds them; its pictures and page numbers can’t be matched to another format’s.</p>
           <h3>Privacy</h3>
           <p>Documents are read and written inside this browser tab. Nothing is uploaded.</p>
         </section>

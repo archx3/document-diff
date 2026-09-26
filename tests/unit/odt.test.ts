@@ -1,5 +1,4 @@
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { compareDocs, inlineDiff } from '../../src/core/compare';
@@ -19,6 +18,7 @@ import { odtBackend } from '../../src/formats/odt/backend';
 import { OdtPackage } from '../../src/formats/odt/package';
 import { readOdt } from '../../src/formats/odt/read';
 import { exportOdt } from '../../src/formats/odt/writer';
+import { libreOfficeText as convert } from '../soffice';
 
 const O = DEFAULT_OPTIONS;
 const OUT = 'tests/fixtures/out';
@@ -32,26 +32,9 @@ const reread = (d: Doc, bytes: Uint8Array) => (d.pkg instanceof DocxPackage ? re
 const diffs = (cmp: Comparison) =>
   cmp.hunks.map((h) => cmp.rows.slice(h.start, h.end).map((r) => `${r.kind}: ${r.l && blockText(r.l)} | ${r.r && blockText(r.r)}`));
 
-let soffice: boolean | undefined;
-function hasSoffice(): boolean {
-  if (soffice === undefined) {
-    try {
-      execFileSync('soffice', ['--version'], { stdio: 'pipe', timeout: 60000 });
-      soffice = true;
-    } catch {
-      soffice = false;
-    }
-  }
-  return soffice;
-}
-
 /** Text of a file as LibreOffice reads it, or null when LibreOffice is not installed. */
 function libreOfficeText(bytes: Uint8Array, name: string): string | null {
-  if (!hasSoffice()) return null;
-  const path = `${OUT}/${name}`;
-  writeFileSync(path, bytes);
-  execFileSync('soffice', ['--headless', '--convert-to', 'txt:Text', '--outdir', OUT, path], { stdio: 'pipe', timeout: 120000 });
-  return readFileSync(path.replace(/\.[^.]+$/, '.txt'), 'utf8');
+  return convert(bytes, OUT, name);
 }
 
 /** Structural checks LibreOffice is strict about. */

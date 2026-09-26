@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { unzipSync } from 'fflate';
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { libreOfficeText as convert } from '../soffice';
 
 const OUT = 'tests/fixtures/out';
 mkdirSync(OUT, { recursive: true });
@@ -144,12 +146,115 @@ test('loads two Word files, copies everything and exports a valid .docx', async 
   expect(text).toContain('Accessibility review');
   expect(text).toContain('within 15 days');
   expect(text).not.toContain('Late payments');
-  try {
-    execFileSync('soffice', ['--headless', '--convert-to', 'txt:Text', '--outdir', OUT, path], { stdio: 'pipe', timeout: 120_000 });
-    expect(readFileSync(path.replace(/\.docx$/, '.txt'), 'utf8')).toContain('Appendix A');
-  } catch (e) {
-    if (!String(e).includes('ENOENT')) throw e;
-  }
+  const lo = libreOfficeText(path);
+  if (lo !== null) expect(lo).toContain('Appendix A');
+});
+
+const badges = (page: Page) => page.locator('.colhead .badge');
+
+function libreOfficeText(path: string): string | null {
+  return convert(null, OUT, path.slice(OUT.length + 1));
+}
+
+test('compares a PDF with a Word file and copies from the PDF', async ({ page }) => {
+  await loadFile(page, 'a', 'tests/fixtures/contract-v2.pdf');
+  await loadFile(page, 'b', 'tests/fixtures/contract-v1.docx');
+  await expect(badges(page)).toHaveText(['PDF', 'Word']);
+  await expect(page.locator('.notice')).toContainText('PDFs are read only');
+  await expect(rowByText(page, 'Accessibility review')).toHaveClass(/k-del/);
+
+  await page.locator('#btn-all').click();
+  await page.locator('.pop [data-apply="all-l2r"]').click();
+  // Only what a PDF cannot carry remains: the picture and the page number.
+  await expect(counter(page)).toHaveText(/^Change 1 of [12]$/);
+
+  await page.locator('.slot[data-side="b"] [data-menu="export"]').click();
+  const download = page.waitForEvent('download');
+  await page.locator('.pop [data-export="docx"]').click();
+  const path = `${OUT}/e2e-from-pdf.docx`;
+  await (await download).saveAs(path);
+  const text = execFileSync('python3', ['-c', 'import sys, docx; print("\\n".join(p.text for p in docx.Document(sys.argv[1]).paragraphs))', path], { encoding: 'utf8' });
+  expect(text).toContain('Accessibility review');
+  expect(text).toContain('up to eight pages');
+});
+
+test('merges two OpenDocument files and saves an .odt', async ({ page }) => {
+  await loadFile(page, 'a', 'tests/fixtures/contract-v1.odt');
+  await loadFile(page, 'b', 'tests/fixtures/contract-v2.odt');
+  await expect(badges(page)).toHaveText(['OpenDocument', 'OpenDocument']);
+  await page.locator('#btn-all').click();
+  await page.locator('.pop [data-apply="all-r2l"]').click();
+  await expect(counter(page)).toHaveText('No differences');
+
+  await page.locator('.slot[data-side="a"] [data-menu="export"]').click();
+  await expect(page.locator('.pop [data-export]').first()).toContainText('OpenDocument text');
+  const download = page.waitForEvent('download');
+  await page.locator('.pop [data-export="odt"]').click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe('contract-v1 (merged).odt');
+  const path = `${OUT}/e2e-merged.odt`;
+  await file.saveAs(path);
+  const zip = unzipSync(readFileSync(path));
+  expect(Object.keys(zip)[0]).toBe('mimetype');
+  expect(new TextDecoder().decode(zip['content.xml'])).toContain('Accessibility review');
+  const lo = libreOfficeText(path);
+  if (lo !== null) expect(lo).toContain('within 15 days');
+});
+
+test('compares CSV files row by row and saves a CSV', async ({ page }) => {
+  writeFileSync(`${OUT}/e2e-a.csv`, 'id,name,qty\n1,Apple,3\n2,Pear,5\n3,Plum,1\n');
+  writeFileSync(`${OUT}/e2e-b.csv`, 'id,name,qty\n1,Apple,3\n2,Pear,6\n3,Plum,1\n4,Fig,2\n');
+  await loadFile(page, 'a', `${OUT}/e2e-a.csv`);
+  await loadFile(page, 'b', `${OUT}/e2e-b.csv`);
+  await expect(badges(page)).toHaveText(['CSV', 'CSV']);
+  await expect(page.locator('.row.frag')).toHaveCount(5);
+  await expect(page.locator('#stats')).toContainText('1 changed');
+  await expect(page.locator('#stats')).toContainText('1 only in B');
+
+  await page.locator('#btn-all').click();
+  await page.locator('.pop [data-apply="all-r2l"]').click();
+  await expect(counter(page)).toHaveText('No differences');
+  await page.locator('.slot[data-side="a"] [data-menu="export"]').click();
+  const download = page.waitForEvent('download');
+  await page.locator('.pop [data-export="csv"]').click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe('e2e-a (merged).csv');
+  const path = `${OUT}/e2e-merged.csv`;
+  await file.saveAs(path);
+  expect(readFileSync(path, 'utf8')).toBe('id,name,qty\n1,Apple,3\n2,Pear,6\n3,Plum,1\n4,Fig,2\n');
+});
+
+test('shows code in a monospace font', async ({ page }) => {
+  writeFileSync(`${OUT}/e2e-a.py`, 'def total(items):\n    return sum(items)\n');
+  writeFileSync(`${OUT}/e2e-b.py`, 'def total(items):\n    return sum(items) + 1\n');
+  await loadFile(page, 'a', `${OUT}/e2e-a.py`);
+  await loadFile(page, 'b', `${OUT}/e2e-b.py`);
+  await expect(badges(page)).toHaveText(['Code', 'Code']);
+  const font = await page.locator('.row .cell.a').first().evaluate((el) => getComputedStyle(el).fontFamily);
+  expect(font).toMatch(/mono/i);
+  await expect(rowByText(page, 'return sum')).toHaveClass(/k-mod/);
+});
+
+test('prints one document for saving as PDF', async ({ page }) => {
+  await page.evaluate(() => {
+    (window as unknown as { printed: string }).printed = '';
+    window.print = () => {
+      window.dispatchEvent(new Event('beforeprint'));
+      const root = document.getElementById('print-root');
+      (window as unknown as { printed: string }).printed = `${document.title}|${root?.textContent?.slice(0, 200) ?? ''}`;
+      window.dispatchEvent(new Event('afterprint'));
+    };
+  });
+  await page.locator('.slot[data-side="b"] [data-menu="export"]').click();
+  await page.locator('.pop [data-export="print"]').click();
+  const printed = await page.evaluate(() => (window as unknown as { printed: string }).printed);
+  expect(printed).toMatch(/\|.*\S/);
+  await expect(page.locator('#print-root')).toHaveCount(0);
+});
+
+test('explains files it cannot read', async ({ page }) => {
+  await loadFile(page, 'a', 'tests/fixtures/contract-v1-password.pdf');
+  await expect(page.locator('.toast.error')).toContainText('password protected');
 });
 
 test('has no horizontal scroll on a phone', async ({ page }) => {

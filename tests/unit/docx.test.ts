@@ -13,6 +13,7 @@ import { docxBackend } from '../../src/formats/docx/backend';
 import { DocxPackage } from '../../src/formats/docx/package';
 import { readDocx } from '../../src/formats/docx/read';
 import { exportDocx } from '../../src/formats/docx/writer';
+import { libreOfficeText as convert } from '../soffice';
 
 const O = DEFAULT_OPTIONS;
 const OUT = 'tests/fixtures/out';
@@ -71,14 +72,7 @@ function validatePackage(bytes: Uint8Array): void {
 }
 
 function libreOfficeText(bytes: Uint8Array, name: string): string | null {
-  const path = `${OUT}/${name}`;
-  writeFileSync(path, bytes);
-  try {
-    execFileSync('soffice', ['--headless', '--convert-to', 'txt:Text', '--outdir', OUT, path], { stdio: 'pipe', timeout: 120000 });
-    return readFileSync(path.replace(/\.docx$/, '.txt'), 'utf8');
-  } catch {
-    return null;
-  }
+  return convert(bytes, OUT, name);
 }
 
 function pythonDocxText(bytes: Uint8Array, name: string): string | null {

@@ -21,6 +21,7 @@ export const icons = {
   chevron: svg('<path d="M4.5 6.5 8 10l3.5-3.5"/>'),
   check: svg('<path d="M3.5 8.5 6.5 11.5 12.5 4.5"/>'),
   fold: svg('<path d="M4 6l4-3 4 3M4 10l4 3 4-3"/>'),
+  print: svg('<path d="M4.5 6V2.5h7V6"/><rect x="2.5" y="6" width="11" height="5" rx="1"/><path d="M4.5 9.5h7v4h-7z"/>'),
   doc: svg('<path d="M4 1.5h5.5L12.5 4.5v10h-8.5z"/><path d="M9.5 1.5v3h3"/>'),
   eye: svg('<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>'),
   trash: svg('<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.5 9h6l.5-9"/>'),
