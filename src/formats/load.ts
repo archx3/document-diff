@@ -29,12 +29,7 @@ function looksLikeHtml(text: string): boolean {
   return /^\s*(<!doctype html|<html|<body|<meta|<p[\s>]|<div[\s>]|<h[1-6][\s>])/i.test(text);
 }
 
-/** Every extension the file picker offers (other files can still be dropped). */
-export const ACCEPTED_EXTENSIONS = [
-  'docx', 'docm', 'dotx', 'dotm', 'doc', 'dot', 'odt', 'ott', 'fodt', 'rtf', 'pdf', 'epub',
-  'html', 'htm', 'xhtml', 'mht', 'mhtml', 'md', 'markdown', 'txt', 'csv', 'tsv', 'gdoc',
-  'json', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'log', 'tex', 'bib', 'rst', 'adoc', 'org', 'srt', 'vtt', 'sql',
-];
+export { ACCEPTED_EXTENSIONS } from './extensions';
 
 export type SniffedKind = 'pdf' | 'rtf' | 'cfb' | 'docx' | 'odt' | 'epub' | 'zip' | 'fodt' | 'text';
 

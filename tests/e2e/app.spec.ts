@@ -27,7 +27,7 @@ async function loadFile(page: Page, side: 'a' | 'b', path: string) {
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.clear());
-  await page.goto('/');
+  await page.goto('/compare/');
   await expect(counter(page)).toContainText('of');
 });
 

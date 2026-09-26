@@ -84,6 +84,13 @@ function isTyping(e: Event): boolean {
   return t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
 }
 
+export interface AppOptions {
+  /** Documents to compare straight away, instead of the sample drafts. */
+  docs?: { a: Doc; b: Doc | null };
+  /** Where the name in the app bar links to. */
+  home?: string;
+}
+
 export class App {
   private a: Doc | null = null;
   private b: Doc | null = null;
@@ -121,21 +128,38 @@ export class App {
   private rulerFrame = 0;
   /** The reader scrolled by hand since the last jump to a change. */
   private userScrolled = false;
+  /** Removes the listeners the app adds to the window and document. */
+  private readonly listeners = new AbortController();
 
-  constructor(private readonly host: HTMLElement) {
+  constructor(
+    private readonly host: HTMLElement,
+    options: AppOptions = {},
+  ) {
     this.loadPrefs();
-    this.buildShell();
+    this.buildShell(options.home);
     this.bind();
-    this.loadSamples();
+    if (options.docs) this.loadDocs(options.docs.a, options.docs.b);
+    else this.loadSamples();
+  }
+
+  /** Takes the app off the page. */
+  destroy(): void {
+    this.listeners.abort();
+    cancelAnimationFrame(this.rulerFrame);
+    this.host.innerHTML = '';
   }
 
   /* ------------------------------------------------------------ shell */
 
-  private buildShell(): void {
+  private buildShell(home?: string): void {
+    const word = '<span class="brand-mark" aria-hidden="true">C</span><span class="brand-name" aria-hidden="true">ollate</span>';
+    const brand = home
+      ? `<a class="brand-word" href="${esc(home)}" aria-label="Collate home">${word}</a>`
+      : `<span class="brand-word" role="img" aria-label="Collate">${word}</span>`;
     this.host.innerHTML = `
 <div class="app">
   <header class="appbar">
-    <div class="brand"><span class="brand-word" role="img" aria-label="Collate"><span class="brand-mark" aria-hidden="true">C</span><span class="brand-name" aria-hidden="true">ollate</span></span><span class="brand-tag">Compare two documents and copy changes across</span></div>
+    <div class="brand">${brand}<span class="brand-tag">Compare two documents and copy changes across</span></div>
     <div class="appbar-actions">
       <button type="button" class="btn ghost" id="btn-swap" title="Swap A and B">${icons.swap}<span>Swap</span></button>
       <button type="button" class="btn ghost" id="btn-new" title="Start again with two new documents">${icons.open}<span>New comparison</span></button>
@@ -264,7 +288,7 @@ export class App {
       if (['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) manual();
     });
     this.el.ruler.addEventListener('click', (e) => this.onRulerClick(e));
-    window.addEventListener('resize', () => {
+    this.onWindow('resize', () => {
       this.closePop();
       this.scheduleRuler();
     });
@@ -277,7 +301,7 @@ export class App {
 
     this.el.pop.addEventListener('click', (e) => this.onPopClick(e));
     this.el.pop.addEventListener('change', (e) => this.onOptionChange(e));
-    document.addEventListener('pointerdown', (e) => {
+    this.onDocument('pointerdown', (e) => {
       if (this.el.pop.hidden) return;
       const t = e.target as Node;
       if (this.el.pop.contains(t) || this.popAnchor?.contains(t)) return;
@@ -286,33 +310,43 @@ export class App {
 
     this.el.dlg.addEventListener('click', (e) => this.onDialogClick(e));
 
-    document.addEventListener('keydown', (e) => this.onKey(e));
-    document.addEventListener('paste', (e) => this.onGlobalPaste(e));
+    this.onDocument('keydown', (e) => this.onKey(e));
+    this.onDocument('paste', (e) => this.onGlobalPaste(e));
     this.bindDrop();
+  }
+
+  /** Listens to the window until the app is destroyed. */
+  private onWindow<K extends keyof WindowEventMap>(type: K, fn: (e: WindowEventMap[K]) => void): void {
+    window.addEventListener(type, fn, { signal: this.listeners.signal });
+  }
+
+  /** Listens to the document until the app is destroyed. */
+  private onDocument<K extends keyof DocumentEventMap>(type: K, fn: (e: DocumentEventMap[K]) => void): void {
+    document.addEventListener(type, fn, { signal: this.listeners.signal });
   }
 
   private bindDrop(): void {
     let depth = 0;
     const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
-    window.addEventListener('dragenter', (e) => {
+    this.onWindow('dragenter', (e) => {
       if (!hasFiles(e)) return;
       e.preventDefault();
       depth++;
       this.el.overlay.hidden = false;
     });
-    window.addEventListener('dragleave', (e) => {
+    this.onWindow('dragleave', (e) => {
       if (!hasFiles(e)) return;
       depth = Math.max(0, depth - 1);
       if (!depth) this.el.overlay.hidden = true;
     });
-    window.addEventListener('dragover', (e) => {
+    this.onWindow('dragover', (e) => {
       if (!hasFiles(e)) return;
       e.preventDefault();
       const half = (e.target as HTMLElement).closest?.('.drop-half');
       for (const h of Array.from(this.el.overlay.children)) h.classList.toggle('hot', h === half);
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
     });
-    window.addEventListener('drop', (e) => {
+    this.onWindow('drop', (e) => {
       if (!hasFiles(e)) return;
       e.preventDefault();
       depth = 0;
@@ -462,6 +496,14 @@ export class App {
     this.a = { ...readHtml(SAMPLE_A, SAMPLE_A_NAME), kind: 'sample' };
     this.b = { ...readHtml(SAMPLE_B, SAMPLE_B_NAME), kind: 'sample' };
     this.sample = true;
+    this.current = 0;
+    this.refresh();
+  }
+
+  /** Shows documents that were read before the app started. */
+  private loadDocs(a: Doc, b: Doc | null): void {
+    this.a = a;
+    this.b = b;
     this.current = 0;
     this.refresh();
   }

@@ -1,0 +1,285 @@
+/* Pieces shared by the landing page and the page that starts a comparison.
+   Colours are SettleMe's, from the tokens in src/styles.css, so the site and
+   the workspace follow the same light and dark themes. Like SettleMe's
+   marketing pages, the site sits on the peach shell (--desk). */
+
+.page {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--desk);
+  color: var(--ink);
+  font: 16px/1.55 var(--font-ui);
+}
+
+/* ------------------------------------------------------------- header */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: color-mix(in srgb, var(--desk) 80%, transparent);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line-2);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  max-width: 1200px;
+  height: 64px;
+  margin: 0 auto;
+  padding: 0 max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px));
+}
+
+.brand {
+  display: inline-flex;
+  align-items: baseline;
+  flex: none;
+  font: 600 24px/1 var(--font-doc);
+  letter-spacing: 0.005em;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.brandMark {
+  font-style: italic;
+  font-size: 1.22em;
+  color: var(--teal);
+  margin-right: 0.02em;
+}
+
+.nav {
+  display: flex;
+  gap: 6px;
+}
+
+.nav a {
+  padding: 8px 13px;
+  border-radius: 9px;
+  color: var(--ink-2);
+  font: 600 14px/1 var(--font-ui);
+  text-decoration: none;
+  transition:
+    background-color 0.12s,
+    color 0.12s;
+}
+
+.nav a:hover {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* ------------------------------------------------------------ buttons */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 22px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: 600 15px/1 var(--font-ui);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    color 0.15s,
+    transform 0.15s;
+}
+
+.pill:active {
+  transform: translateY(1px);
+}
+
+.pill:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.pill svg {
+  flex: none;
+}
+
+.small {
+  height: 38px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+.large {
+  height: 52px;
+  padding: 0 28px;
+  font-size: 16px;
+}
+
+/* Navy with a white label, which the dark theme turns into a light pill with a dark one. */
+.primary {
+  background: var(--ink);
+  color: var(--paper);
+  box-shadow: 0 10px 22px -12px rgba(22, 56, 75, 0.7);
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--ink-hover);
+}
+
+.secondary {
+  background: var(--paper);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.quiet {
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.quiet:hover {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.arrow {
+  transition: transform 0.15s;
+}
+
+.pill:hover .arrow,
+.textLink:hover .arrow {
+  transform: translateX(3px);
+}
+
+.textLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.textLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------------------------------------------------------- drop card */
+
+.drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 34px 28px 28px;
+  border: 1.5px dashed var(--teal-soft);
+  border-radius: 24px;
+  background: var(--paper);
+  text-align: center;
+  transition:
+    border-color 0.15s,
+    background-color 0.15s,
+    box-shadow 0.15s,
+    transform 0.15s;
+}
+
+/* SettleMe's focus treatment: a teal border and a soft teal halo. */
+.drop[data-hot] {
+  border-style: solid;
+  border-color: var(--teal);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 6px var(--ring);
+  transform: translateY(-2px);
+}
+
+.siglum {
+  font: italic 600 54px/1 var(--font-doc);
+  color: var(--accent);
+}
+
+.dropTitle {
+  margin: 10px 0 4px;
+  font: 600 23px/1.25 var(--font-doc);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.dropText {
+  margin: 0 0 18px;
+  color: var(--ink-2);
+}
+
+.hint {
+  margin: 16px 0 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  text-wrap: balance;
+}
+
+/* ------------------------------------------------------------- footer */
+
+/* Deep navy in both themes, as on SettleMe's marketing pages. */
+.footer {
+  background: var(--navy-deep);
+  color: var(--on-invert-muted);
+  font-size: 14px;
+}
+
+.footerBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 28px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 16px calc(28px + env(safe-area-inset-bottom, 0px));
+}
+
+.footerBar .brand {
+  font-size: 20px;
+  color: var(--on-invert);
+}
+
+.footerLinks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin-left: auto;
+}
+
+.footerLinks a {
+  color: var(--on-invert-soft);
+  text-decoration: none;
+  transition: color 0.12s;
+}
+
+.footerLinks a:hover {
+  color: var(--on-invert);
+}
+
+@media (max-width: 860px) {
+  .nav {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .hideNarrow {
+    display: none;
+  }
+}

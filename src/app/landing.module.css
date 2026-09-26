@@ -1,0 +1,535 @@
+/* The landing page, laid out like SettleMe's: the hero on the peach shell, then
+   full-width white and off-white bands divided by hairlines, a navy band to
+   close. Shared pieces (header, buttons, the drop card) are in
+   components/site.module.css. */
+
+.hero {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 72px 16px 0;
+  text-align: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 26px;
+  padding: 7px 15px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 6px 16px -10px rgba(22, 56, 75, 0.18);
+}
+
+.badgeNew {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--terra-ink);
+  font-weight: 700;
+}
+
+.title {
+  margin: 0;
+  font: 500 clamp(2.9rem, 1.4rem + 6.2vw, 5.6rem) / 1.02 var(--font-doc);
+  letter-spacing: -0.024em;
+  text-wrap: balance;
+}
+
+.title em {
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+.lead {
+  max-width: 660px;
+  margin: 24px auto 0;
+  color: var(--ink-2);
+  font-size: clamp(1.03rem, 0.95rem + 0.35vw, 1.2rem);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.start {
+  max-width: 720px;
+  margin: 38px auto 0;
+  border-radius: 24px;
+  box-shadow: var(--shadow-float);
+}
+
+.alt {
+  margin: 22px 0 0;
+  color: var(--ink-2);
+}
+
+.assurances {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 0;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-3);
+  font-size: 13.5px;
+}
+
+.assurances li + li::before {
+  content: '·';
+  margin: 0 10px;
+}
+
+/* The workspace rises out of the band below it. */
+.preview {
+  max-width: 1120px;
+  margin: 56px auto 0;
+  padding: 0 16px;
+}
+
+/* ----------------------------------------------------------- bands */
+
+.band {
+  padding: 96px max(16px, calc((100% - 1180px) / 2));
+  border-top: 1px solid var(--line-2);
+  background: var(--paper);
+  scroll-margin-top: 40px;
+}
+
+.tinted {
+  background: var(--surface);
+}
+
+.formats {
+  padding-block: 30px 34px;
+  text-align: center;
+  scroll-margin-top: 80px;
+}
+
+.formatsTitle {
+  margin: 0 0 18px;
+  color: var(--label);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.formatList {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px 36px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.formatList li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  color: color-mix(in srgb, var(--ink-2) 72%, transparent);
+  font: 600 20px/1.2 var(--font-doc);
+}
+
+.formatList span {
+  color: var(--ink-3);
+  font: 400 12px/1 var(--font-mono);
+}
+
+.sectionHead {
+  max-width: 720px;
+  margin: 0 auto 50px;
+  text-align: center;
+}
+
+.eyebrow {
+  margin: 0 0 14px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.eyebrow[data-tone='terra'] {
+  color: var(--terra-ink);
+}
+
+.h2 {
+  margin: 0;
+  font: 500 clamp(2rem, 1.35rem + 2.5vw, 3rem) / 1.08 var(--font-doc);
+  letter-spacing: -0.017em;
+  text-wrap: balance;
+}
+
+.h2 em {
+  color: var(--ink-2);
+}
+
+.sectionLead {
+  max-width: 620px;
+  margin: 16px auto 0;
+  color: var(--ink-2);
+  font-size: 17px;
+  text-wrap: pretty;
+}
+
+/* ---------------------------------------------------------- features */
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feature {
+  padding: 24px 22px;
+  border: 1px solid var(--line-2);
+  border-radius: 22px;
+  background: var(--surface);
+  transition: box-shadow 0.18s;
+}
+
+.feature:hover {
+  box-shadow:
+    0 2px 8px rgba(22, 56, 75, 0.05),
+    0 22px 44px -26px rgba(22, 56, 75, 0.3);
+}
+
+/* Each card takes one tint from the palette, as SettleMe's feature cards do. */
+.featureIcon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 18px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.featureIcon[data-tone='terra'] {
+  background: var(--a-tint);
+  color: var(--terra-ink);
+}
+
+.featureIcon[data-tone='ink'] {
+  background: var(--chip-ink);
+  color: var(--ink);
+}
+
+.featureIcon[data-tone='amber'] {
+  background: var(--amber-tint);
+  color: var(--amber);
+}
+
+.featureIcon[data-tone='green'] {
+  background: var(--b-tint);
+  color: var(--b);
+}
+
+.featureIcon[data-tone='blue'] {
+  background: var(--chg-tint);
+  color: var(--chg);
+}
+
+.feature h3 {
+  margin: 0 0 7px;
+  font: 600 20px/1.25 var(--font-doc);
+}
+
+.feature p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+/* ------------------------------------------------------ how it works */
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 22px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stepItem {
+  padding: 28px 26px;
+  border: 1px solid var(--line-2);
+  border-radius: 22px;
+  background: var(--paper);
+  box-shadow: var(--shadow-card);
+}
+
+.stepNumber {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  color: var(--terra-ink);
+  font: 500 32px/1 var(--font-doc);
+}
+
+.stepNumber::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line-2);
+}
+
+.stepItem h3 {
+  margin: 0 0 7px;
+  font: 600 20px/1.25 var(--font-doc);
+}
+
+.stepItem p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.bandCta {
+  margin: 44px 0 0;
+  text-align: center;
+}
+
+/* --------------------------------------------------------- round trip */
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  align-items: center;
+  gap: 56px;
+}
+
+.splitText > p {
+  margin: 18px 0 0;
+  color: var(--ink-2);
+  font-size: 16px;
+  line-height: 1.65;
+}
+
+.checks {
+  display: grid;
+  gap: 12px;
+  margin: 26px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checks li {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  font-size: 14.5px;
+}
+
+.check {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-top: 1px;
+  border-radius: 8px;
+  background: var(--b-tint);
+  color: var(--b);
+}
+
+/* The export menu, as the workspace shows it. */
+.menu {
+  justify-self: center;
+  width: min(100%, 420px);
+  padding: 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 20px;
+  background: var(--paper);
+  box-shadow:
+    0 2px 8px rgba(22, 56, 75, 0.06),
+    0 30px 60px -36px rgba(22, 56, 75, 0.4);
+}
+
+.menu hr {
+  height: 1px;
+  margin: 6px;
+  border: 0;
+  background: var(--line-2);
+}
+
+.menuTitle {
+  margin: 0;
+  padding: 12px 12px 6px;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.menuItem {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.menuItem svg {
+  margin-top: 2px;
+  color: var(--ink-2);
+}
+
+.menuItem[data-on] {
+  background: var(--accent-soft);
+}
+
+.menuItem[data-on] svg {
+  color: var(--accent);
+}
+
+.menuItem small {
+  margin-left: 3px;
+  color: var(--ink-3);
+  font: 12px var(--font-mono);
+}
+
+.menuItem em {
+  display: block;
+  color: var(--ink-3);
+  font-size: 12.5px;
+  font-style: normal;
+}
+
+/* ------------------------------------------------------------ privacy */
+
+.privacy {
+  text-align: center;
+}
+
+.privacy .sectionLead {
+  max-width: 640px;
+}
+
+.privacyIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  margin-bottom: 24px;
+  border-radius: 18px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: 0 0 0 8px var(--ring);
+}
+
+/* ---------------------------------------------------- the navy band */
+
+.final {
+  position: relative;
+  overflow: hidden;
+  padding: 84px max(16px, calc((100% - 1180px) / 2));
+  background: var(--invert);
+  color: var(--on-invert);
+  text-align: center;
+}
+
+/* Light from above, in the brand teal. */
+.final::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 80% at 50% 0%, rgba(71, 173, 180, 0.22), transparent 70%);
+  pointer-events: none;
+}
+
+.final > * {
+  position: relative;
+}
+
+.final .h2 {
+  font-size: clamp(2.2rem, 1.5rem + 2.8vw, 3.2rem);
+}
+
+.final p {
+  max-width: 520px;
+  margin: 16px auto 0;
+  color: var(--on-invert-soft);
+  font-size: 17px;
+}
+
+.finalActions {
+  display: flex;
+  justify-content: center;
+  margin-top: 30px;
+}
+
+.finalPrimary {
+  background: var(--teal-btn);
+  color: var(--paper);
+  box-shadow: 0 16px 34px -14px rgba(71, 173, 180, 0.8);
+}
+
+.finalPrimary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.final .finalLink {
+  margin-top: 20px;
+  font-size: 14px;
+}
+
+.finalLink a {
+  color: var(--on-invert-soft);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  transition: color 0.12s;
+}
+
+.finalLink a:hover {
+  color: var(--on-invert);
+}
+
+/* ------------------------------------------------------------ narrow */
+
+@media (max-width: 900px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 44px;
+  }
+}
+
+@media (max-width: 640px) {
+  .hero {
+    padding-top: 48px;
+  }
+
+  .band {
+    padding-block: 64px;
+  }
+
+  .formats {
+    padding-block: 26px 30px;
+  }
+
+  .preview {
+    margin-top: 44px;
+  }
+
+  .final {
+    padding-block: 60px;
+  }
+}

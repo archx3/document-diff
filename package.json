@@ -5,11 +5,11 @@
   "description": "Collate: compare two documents (Word, Google Docs, PDF, OpenDocument, RTF, EPUB, HTML, Markdown, CSV, text) side by side and copy changes between them, entirely in the browser.",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "next dev",
+    "build": "next build",
     "build:single": "vite build --mode single --outDir dist-single-build && node scripts/inline-build.mjs dist-single-build",
-    "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "preview": "vite preview --outDir out",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -17,11 +17,16 @@
   },
   "dependencies": {
     "fflate": "^0.8.3",
-    "pdfjs-dist": "^6.3.289"
+    "next": "^16.3.6",
+    "pdfjs-dist": "^6.3.289",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
     "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "jsdom": "^30.1.1",
     "pdfmake": "^0.3.11",
     "typescript": "^7.0.2",

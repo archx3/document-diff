@@ -26,7 +26,8 @@ export const PDFJS_CDN = {
 let lib: Promise<PdfJs> | null = null;
 
 function importPdfjs(): Promise<[unknown, unknown]> {
-  if (import.meta.env.MODE === 'single') return Promise.all([import(/* @vite-ignore */ PDFJS_CDN.lib), import(/* @vite-ignore */ PDFJS_CDN.worker)]);
+  // `import.meta.env` exists only in the Vite build of the single file; the site is built by Next.js.
+  if (import.meta.env?.MODE === 'single') return Promise.all([import(/* @vite-ignore */ PDFJS_CDN.lib), import(/* @vite-ignore */ PDFJS_CDN.worker)]);
   return Promise.all([import('pdfjs-dist/legacy/build/pdf.mjs'), import('pdfjs-dist/legacy/build/pdf.worker.mjs')]);
 }
 

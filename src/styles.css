@@ -1,32 +1,62 @@
-/* Collate: an editor's desk. Two sheets of paper, a blue pencil, red and green marks. */
+/* Collate: an editor's desk. Two sheets of paper on SettleMe's peach, a teal pencil, terracotta and green marks. */
 
 :root {
-  --desk: #edf0f4;
-  --surface: #f7f8fa;
-  --paper: #ffffff;
-  --ink: #17202c;
-  --ink-2: #4a5668;
-  --ink-3: #7b8698;
-  --line: #d5dbe3;
-  --line-2: #e6eaf0;
-  --accent: #2f5bd3;
+  /* SettleMe's warm-editorial palette (packages/ui/src/tokens.css in the SettleMe repository):
+     peach paper, navy ink, teal accents. The comments name each colour's SettleMe token. */
+  --desk: #fef1ee; /* su-shell: the peach the sheets sit on */
+  --surface: #fcfaf9; /* su-page */
+  --paper: #ffffff; /* su-card */
+  --ink: #16384b; /* su-ink */
+  --ink-hover: #1e4a60; /* su-ink-hover */
+  --ink-2: #2f6b78; /* su-body */
+  /* su-muted (#8aa7ad) is 2.6:1 on white, too faint for the workspace's small print; this is
+     the darker muted teal from SettleMe's footer (3.8:1). */
+  --ink-3: #5e8a93;
+  --line: #ede2dd; /* su-border */
+  --line-2: #f4ece8; /* su-line */
+  --hover: #f7f3f1; /* su-hover */
+  --accent: #2e7075; /* su-teal-ink: the teal that text and a white label can sit on */
   --accent-ink: #ffffff;
-  --accent-soft: #e4ebfc;
-  --a: #b3261e;
-  --a-tint: #fcf0ef;
-  --a-mark: #f6c9c4;
-  --b: #1b7446;
-  --b-tint: #ecf7f0;
-  --b-mark: #bfe5cd;
-  --chg: #a86b00;
-  --chg-tint: #fff6e3;
-  --fmt-mark: #f5e4b3;
-  --hatch: #e3e7ee;
-  --backdrop: rgba(14, 18, 24, 0.45);
-  --shadow: 0 1px 2px rgba(23, 32, 44, 0.06), 0 6px 20px rgba(23, 32, 44, 0.1);
-  --font-ui: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-doc: 'Source Serif 4', 'Source Serif Pro', Georgia, 'Times New Roman', serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --accent-soft: #f1f9f9; /* su-well */
+  /* Changes: A's side in terracotta, B's in green, paragraphs that differ on both sides in
+     SettleMe's blue (its amber is too close to terracotta to tell apart on the ruler). */
+  --a: #a64831; /* su-terra-ink */
+  --a-tint: #fbefe9; /* su-chip-terra-soft */
+  --a-mark: #ebc3b6;
+  --b: #2a7e65; /* su-green, a shade deeper so it can be read as text */
+  --b-tint: #e4f3f2; /* su-chip-green */
+  --b-mark: #b7dad0;
+  --chg: #3a6a93; /* su-blue */
+  --chg-tint: #e9f0f6; /* su-chip-blue */
+  --fmt-mark: #cfddeb;
+  --hatch: #ede2dd;
+  --backdrop: rgba(18, 48, 63, 0.45);
+  --shadow: 0 18px 40px -16px rgba(22, 56, 75, 0.45), 0 2px 8px rgba(22, 56, 75, 0.08); /* su-pop */
+  /* The rest of the palette, for the site's pages. */
+  --teal: #47adb4; /* su-teal: marks and lines, never text */
+  --teal-soft: #9fd0d2;
+  --teal-btn: #31787c;
+  --ring: rgba(71, 173, 180, 0.12);
+  --terra: #ce7058;
+  --terra-ink: #a64831;
+  --amber: #c77a3e;
+  --amber-tint: #fdeee2; /* su-chip-amber */
+  --chip-ink: #e7eef1;
+  --label: #b7a399; /* su-label-2 */
+  --line-strong: #e7d0c8; /* su-border-2 */
+  --invert: #16384b; /* navy bands, dark in both themes */
+  --navy-deep: #12303f;
+  --on-invert: #ffffff;
+  --on-invert-soft: #9fc2c8;
+  --on-invert-muted: #7fa1a8;
+  --on-invert-faint: #5e8a93;
+  --shadow-card: 0 1px 2px rgba(22, 56, 75, 0.03), 0 16px 32px -24px rgba(22, 56, 75, 0.22);
+  --shadow-float: 0 2px 10px rgba(22, 56, 75, 0.05), 0 34px 64px -30px rgba(22, 56, 75, 0.3);
+  /* The site serves its own copies of the fonts (next/font sets these variables);
+     the single-file build loads them from Google Fonts by name. */
+  --font-ui: var(--font-plex-sans, 'IBM Plex Sans'), system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-doc: var(--font-source-serif, 'Source Serif 4'), 'Source Serif Pro', Georgia, 'Times New Roman', serif;
+  --font-mono: var(--font-plex-mono, 'IBM Plex Mono'), ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   --gut: 76px;
   --pad: 16px;
   color-scheme: light;
@@ -34,57 +64,93 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --desk: #0e1218;
-    --surface: #141922;
-    --paper: #1a2029;
-    --ink: #e3e8ef;
-    --ink-2: #a5b0c0;
-    --ink-3: #758195;
-    --line: #2c3442;
-    --line-2: #232a36;
-    --accent: #88a9ff;
-    --accent-ink: #0e1218;
-    --accent-soft: #1e2a45;
-    --a: #ff9389;
-    --a-tint: #2a1819;
-    --a-mark: #6b2b27;
-    --b: #72d9a0;
-    --b-tint: #122519;
-    --b-mark: #1f5738;
-    --chg: #e8b04b;
-    --chg-tint: #2a2413;
-    --fmt-mark: #5a4816;
-    --hatch: #252c38;
-    --backdrop: rgba(0, 0, 0, 0.6);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.4);
+    --desk: #0b232b;
+    --surface: #0e2a33;
+    --paper: #16333d;
+    --ink: #ecf3f3;
+    --ink-hover: #ffffff;
+    --ink-2: #aecacf;
+    --ink-3: #89a5ab;
+    --line: #2c444d;
+    --line-2: #27404a;
+    --hover: #183a44;
+    --accent: #5bc3ca;
+    --accent-ink: #16333d;
+    --accent-soft: #153b45;
+    --a: #e7947b;
+    --a-tint: #3a2620;
+    --a-mark: #6e473b;
+    --b: #6bcba6;
+    --b-tint: #1a4236;
+    --b-mark: #2d6153;
+    --chg: #8fb6db;
+    --chg-tint: #1b2e3b;
+    --fmt-mark: #345464;
+    --hatch: #27404a;
+    --backdrop: rgba(3, 14, 18, 0.62);
+    --shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+    --teal: #5bc3ca;
+    --teal-soft: #35707b;
+    --teal-btn: #5bc3ca;
+    --ring: rgba(91, 195, 202, 0.18);
+    --terra: #e7947b;
+    --terra-ink: #e99d86;
+    --amber: #e0a56e;
+    --amber-tint: #37291c;
+    --chip-ink: #22343c;
+    --label: #9baaaf;
+    --line-strong: #2c444d;
+    --invert: #0a1f27;
+    --navy-deep: #081c23;
+    --on-invert: #ecf3f3;
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 32px -24px rgba(0, 0, 0, 0.5);
+    --shadow-float: 0 2px 10px rgba(0, 0, 0, 0.2), 0 34px 64px -30px rgba(0, 0, 0, 0.6);
     color-scheme: dark;
   }
 }
 
 :root[data-theme='dark'] {
-  --desk: #0e1218;
-  --surface: #141922;
-  --paper: #1a2029;
-  --ink: #e3e8ef;
-  --ink-2: #a5b0c0;
-  --ink-3: #758195;
-  --line: #2c3442;
-  --line-2: #232a36;
-  --accent: #88a9ff;
-  --accent-ink: #0e1218;
-  --accent-soft: #1e2a45;
-  --a: #ff9389;
-  --a-tint: #2a1819;
-  --a-mark: #6b2b27;
-  --b: #72d9a0;
-  --b-tint: #122519;
-  --b-mark: #1f5738;
-  --chg: #e8b04b;
-  --chg-tint: #2a2413;
-  --fmt-mark: #5a4816;
-  --hatch: #252c38;
-  --backdrop: rgba(0, 0, 0, 0.6);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.4);
+  --desk: #0b232b;
+  --surface: #0e2a33;
+  --paper: #16333d;
+  --ink: #ecf3f3;
+  --ink-hover: #ffffff;
+  --ink-2: #aecacf;
+  --ink-3: #89a5ab;
+  --line: #2c444d;
+  --line-2: #27404a;
+  --hover: #183a44;
+  --accent: #5bc3ca;
+  --accent-ink: #16333d;
+  --accent-soft: #153b45;
+  --a: #e7947b;
+  --a-tint: #3a2620;
+  --a-mark: #6e473b;
+  --b: #6bcba6;
+  --b-tint: #1a4236;
+  --b-mark: #2d6153;
+  --chg: #8fb6db;
+  --chg-tint: #1b2e3b;
+  --fmt-mark: #345464;
+  --hatch: #27404a;
+  --backdrop: rgba(3, 14, 18, 0.62);
+  --shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+  --teal: #5bc3ca;
+  --teal-soft: #35707b;
+  --teal-btn: #5bc3ca;
+  --ring: rgba(91, 195, 202, 0.18);
+  --terra: #e7947b;
+  --terra-ink: #e99d86;
+  --amber: #e0a56e;
+  --amber-tint: #37291c;
+  --chip-ink: #22343c;
+  --label: #9baaaf;
+  --line-strong: #2c444d;
+  --invert: #0a1f27;
+  --navy-deep: #081c23;
+  --on-invert: #ecf3f3;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 32px -24px rgba(0, 0, 0, 0.5);
+  --shadow-float: 0 2px 10px rgba(0, 0, 0, 0.2), 0 34px 64px -30px rgba(0, 0, 0, 0.6);
   color-scheme: dark;
 }
 
@@ -165,10 +231,15 @@ kbd {
   letter-spacing: 0.005em;
 }
 
+a.brand-word {
+  color: inherit;
+  text-decoration: none;
+}
+
 .brand-mark {
   font-style: italic;
   font-size: 1.22em;
-  color: var(--accent);
+  color: var(--teal);
   margin-right: 0.02em;
 }
 
@@ -1578,7 +1649,7 @@ ins.chg .obj-img {
 
 .toast.error {
   background: var(--a);
-  color: #fff;
+  color: var(--paper);
 }
 
 .toast .linkbtn {

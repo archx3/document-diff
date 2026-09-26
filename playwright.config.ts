@@ -15,7 +15,8 @@ export default defineConfig({
     launchOptions: localChromium ? { executablePath: localChromium } : {},
   },
   webServer: {
-    command: 'npx vite build && npx vite preview --port 4174 --strictPort',
+    // The site is a static export (out/); Vite's preview server serves it.
+    command: 'npx next build && npx vite preview --outDir out --port 4174 --strictPort',
     port: 4174,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

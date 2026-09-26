@@ -1,7 +1,7 @@
 import { defineConfig } from 'vitest/config';
 
-// `vite build --mode single` keeps everything in one script (for the self-contained page);
-// the normal build loads pdf.js only when a PDF is opened.
+// The site is built by Next.js. Vite runs the unit tests and builds the self-contained page
+// (`vite build --mode single`, from index.html and src/main.ts), which keeps everything in one script.
 export default defineConfig(({ mode }) => ({
   // Relative asset URLs so the build works from any sub-path (GitHub Pages, file hosting).
   base: './',
