@@ -4,7 +4,7 @@ import styles from './preview.module.css';
 
 type Kind = 'same' | 'mod' | 'ins';
 
-function Row({ kind, a, b, current }: { kind: Kind; a?: ReactNode; b: ReactNode; current?: boolean }) {
+function Row({ kind, a, b, current }: Readonly<{ kind: Kind; a?: ReactNode; b: ReactNode; current?: boolean }>) {
   return (
     <div className={styles.row} data-k={kind} data-current={current || undefined}>
       <div className={styles.cell} data-side="a">
