@@ -11,3 +11,5 @@ dist-single-build/
 out/
 next-env.d.ts
 *.tsbuildinfo
+.idea
+../payme-platform/dev-info.md

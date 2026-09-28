@@ -62,7 +62,7 @@ The toolbar has three parts:
 - **View**, in the middle: side by side or unified, the minimap, line numbers in the gutter (paragraph numbers, which for text and code files are their line numbers), connection bands, *Compare* options, and *Previous page* / *Next page*.
 - **Editing**, on the right: undo, redo, *Copy changes* and the list of changes.
 
-The counter ("3/7": the third of seven changes) sits between the column heads, above the ruler. View settings are remembered in the browser. In the app bar, the low contrast button drops the borders so the sheets and the desk share one colour, and the theme button switches between light and dark. The theme applies to every page and is remembered; picking the system's own theme again goes back to following the system. Notes about the documents (such as a PDF not being editable in place) can be dismissed.
+The counter ("3/7": the third of seven changes) sits between the column heads, above the ruler. View settings are remembered in the browser. In the app bar, the low contrast button drops the borders and lines (all but the one under the column heads) so the sheets and the desk share one colour, and the theme button switches between light and dark. The theme applies to every page and is remembered; picking the system's own theme again goes back to following the system. Notes about the documents (such as a PDF not being editable in place) can be dismissed.
 
 ### Keyboard
 
