@@ -13,3 +13,6 @@ next-env.d.ts
 *.tsbuildinfo
 .idea
 ../payme-platform/dev-info.md
+
+# Spelling dictionaries, generated on install (scripts/build-dictionaries.mjs)
+src/check/dict/*.gen.ts

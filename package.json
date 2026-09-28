@@ -13,11 +13,15 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "fixtures": "python3 scripts/make_fixtures.py"
+    "fixtures": "python3 scripts/make_fixtures.py",
+    "postinstall": "node scripts/build-dictionaries.mjs"
   },
   "dependencies": {
+    "dictionary-en": "^4.0.0",
+    "dictionary-en-gb": "^3.0.0",
     "fflate": "^0.8.3",
     "next": "^16.3.6",
+    "nspell": "^2.1.5",
     "pdfjs-dist": "^6.3.289",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
