@@ -6,10 +6,23 @@ import { computeListLabels } from '../core/lists';
 import type { Dir } from '../core/merge';
 import type { CompareOptions } from '../core/tokens';
 import { optionsKey } from '../core/tokens';
+import type { MarginInfo } from '../review/marks';
+import { marginKey, marginSig } from '../review/marks';
 import type { Anchor } from './layout';
+import type { RailActions } from './rail';
+import { Rail, RailSpace } from './rail';
 import type { Labels } from './render';
 import type { Act, GridItem } from './rows';
 import { actLabels, numbering, rowParts } from './rows';
+
+/** Review mode, for the margins outside the documents. */
+export interface ReviewView {
+  /** The marks beside each side of each row (see marginKey). */
+  margins: ReadonlyMap<string, MarginInfo>;
+  /** The line (and side) with text selected in it, as "anchor|side". */
+  selected: string | null;
+  actions: RailActions;
+}
 
 export interface GridProps {
   cmp: Comparison;
@@ -25,11 +38,19 @@ export interface GridProps {
   onPick(hunk: number): void;
   /** The rows were rendered again. */
   onRender(): void;
+  /** Review mode's margins, or null when it is off. */
+  review: ReviewView | null;
   ref?: Ref<HTMLDivElement>;
 }
 
+/** The "anchor|side" with text selected in it, when it is on one of this row's lines. */
+export function selectedIn(review: ReviewView | null, rowKey: string): string | null {
+  const sel = review?.selected;
+  return sel && (sel.startsWith(`${rowKey}|`) || sel.startsWith(`${rowKey}#`)) ? sel : null;
+}
+
 /** The two documents side by side, one aligned row at a time. */
-export const DocumentGrid = memo(function DocumentGrid({ cmp, items, current, onCopy, onFold, onInline, onPick, onRender, ref }: GridProps) {
+export const DocumentGrid = memo(function DocumentGrid({ cmp, items, current, onCopy, onFold, onInline, onPick, onRender, review, ref }: GridProps) {
   const [labelsL, labelsR] = useMemo(() => [computeListLabels(cmp.left.blocks), computeListLabels(cmp.right.blocks)], [cmp]);
   const [numA, numB] = useMemo(() => [numbering(cmp.left), numbering(cmp.right)], [cmp]);
   const optsKey = optionsKey(cmp.opts);
@@ -88,6 +109,10 @@ export const DocumentGrid = memo(function DocumentGrid({ cmp, items, current, on
             labelsL={labelsL}
             labelsR={labelsR}
             onCopy={onCopy}
+            review={review}
+            railA={review?.margins.get(marginKey(item.row.key, 'a'))}
+            railB={review?.margins.get(marginKey(item.row.key, 'b'))}
+            selected={selectedIn(review, item.row.key)}
           />
         ),
       )}
@@ -110,6 +135,12 @@ interface RowViewProps {
   labelsL: Labels;
   labelsR: Labels;
   onCopy: GridProps['onCopy'];
+  review: ReviewView | null;
+  /** The marks beside the row's first line, on each side. */
+  railA?: MarginInfo;
+  railB?: MarginInfo;
+  /** The line of this row with text selected in it ("anchor|side"). */
+  selected: string | null;
 }
 
 /**
@@ -118,18 +149,27 @@ interface RowViewProps {
  * the rows that changed.
  */
 const RowView = memo(
-  function RowView({ row, hunk, cur, labelA, labelB, na, nb, optsKey, opts, labelsL, labelsR, onCopy }: RowViewProps) {
+  function RowView({ row, hunk, cur, labelA, labelB, na, nb, optsKey, opts, labelsL, labelsR, onCopy, review, railA, railB, selected }: RowViewProps) {
     // The key, the labels and the options say what the row shows (a new comparison makes new row objects).
     const parts = useMemo(() => rowParts(row, opts, labelsL, labelsR), [row.key, labelA, labelB, optsKey]);
+    const rail = (side: 'a' | 'b', i: number, anchor: string) => {
+      if (!review) return null;
+      const sel = selected === `${anchor}|${side}`;
+      // The marks go beside the row's first line; a later line (of a table) has them only while text in it is selected.
+      if (i > 0 && !sel) return <RailSpace side={side} />;
+      return <Rail side={side} rowKey={row.key} info={i === 0 ? (side === 'a' ? railA : railB) : undefined} selected={sel} actions={review.actions} />;
+    };
     return (
       <>
         {parts.map((p, i) => (
           <div key={i} className={`row k-${p.kind}${p.extra}${cur ? ' cur' : ''}`} data-key={row.key} data-a={p.anchor} data-hunk={hunk} data-la={p.la} data-lb={p.lb}>
+            {rail('a', i, p.anchor)}
             <div className="cell a" dangerouslySetInnerHTML={{ __html: p.a }} />
             <div className="gut" data-na={i === 0 ? na : undefined} data-nb={i === 0 ? nb : undefined}>
               {p.act && <Arrows act={p.act} rowKey={row.key} onCopy={onCopy} />}
             </div>
             <div className="cell b" dangerouslySetInnerHTML={{ __html: p.b }} />
+            {rail('b', i, p.anchor)}
           </div>
         ))}
       </>
@@ -143,7 +183,12 @@ const RowView = memo(
     p.labelB === q.labelB &&
     p.na === q.na &&
     p.nb === q.nb &&
-    p.optsKey === q.optsKey,
+    p.optsKey === q.optsKey &&
+    !!p.review === !!q.review &&
+    p.review?.actions === q.review?.actions &&
+    marginSig(p.railA) === marginSig(q.railA) &&
+    marginSig(p.railB) === marginSig(q.railB) &&
+    p.selected === q.selected,
 );
 
 /** The arrows either side of the ruler that copy a row across. */

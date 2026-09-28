@@ -72,6 +72,15 @@
   --font-doc: var(--font-source-serif, 'Source Serif 4'), 'Source Serif Pro', Georgia, 'Times New Roman', serif;
   --font-mono: var(--font-plex-mono, 'IBM Plex Mono'), ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   --pad: 16px;
+  /* Review marks: highlight colours, noted text, and the text a note is being written on. */
+  --hl-yellow: #fbe8a0;
+  --hl-green: #cdebd2;
+  --hl-blue: #d3e4f7;
+  --hl-pink: #f7d5e2;
+  --note-mark: rgba(46, 112, 117, 0.14);
+  --focus-mark: rgba(71, 173, 180, 0.32);
+  --spell: #c0392b;
+  --grammar: #2f6fb3;
   color-scheme: light;
 }
 
@@ -128,6 +137,14 @@
     --on-invert: #ecf3f3;
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 32px -24px rgba(0, 0, 0, 0.5);
     --shadow-float: 0 2px 10px rgba(0, 0, 0, 0.2), 0 34px 64px -30px rgba(0, 0, 0, 0.6);
+    --hl-yellow: #5b4c14;
+    --hl-green: #1e4b33;
+    --hl-blue: #1f3e5e;
+    --hl-pink: #5b2842;
+    --note-mark: rgba(91, 195, 202, 0.2);
+    --focus-mark: rgba(91, 195, 202, 0.36);
+    --spell: #ff8a7a;
+    --grammar: #8ab8ff;
     color-scheme: dark;
   }
 }
@@ -183,6 +200,14 @@
   --on-invert: #ecf3f3;
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 16px 32px -24px rgba(0, 0, 0, 0.5);
   --shadow-float: 0 2px 10px rgba(0, 0, 0, 0.2), 0 34px 64px -30px rgba(0, 0, 0, 0.6);
+  --hl-yellow: #5b4c14;
+  --hl-green: #1e4b33;
+  --hl-blue: #1f3e5e;
+  --hl-pink: #5b2842;
+  --note-mark: rgba(91, 195, 202, 0.2);
+  --focus-mark: rgba(91, 195, 202, 0.36);
+  --spell: #ff8a7a;
+  --grammar: #8ab8ff;
   color-scheme: dark;
 }
 
@@ -1612,6 +1637,770 @@ a.brand-word {
   }
 
   .app.unified .endcap::after {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------- review */
+
+/* Review mode: a margin outside each document (left of A, right of B; right of the one column in
+   the unified view), with each paragraph's marks and the buttons that add them. Marked words are
+   coloured with the CSS Custom Highlight API (review/dom.ts), so the documents' HTML stays as it
+   is. The margins sit inside the rows (whose painting is contained), level with each row. */
+.app.review {
+  --mg: 60px;
+}
+
+.rail {
+  display: none;
+}
+
+.app.review .rail {
+  display: flex;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  padding-top: 6px;
+}
+
+.app.review .rail.a {
+  justify-content: flex-end;
+  padding-right: 5px;
+}
+
+.app.review .rail.b {
+  justify-content: flex-start;
+  padding-left: 5px;
+}
+
+/* Side by side: a margin column at each end of the rows and the heads. */
+.app.review.split .colheads,
+.app.review.split .grid:not(.egrid) > .row,
+.app.review.split .endcap {
+  grid-template-columns: var(--mg) minmax(0, 1fr) var(--gut) minmax(0, 1fr) var(--mg);
+}
+
+.app.review.split .colhead.a {
+  grid-column: 2;
+}
+
+.app.review.split .colhead.gut {
+  grid-column: 3;
+}
+
+.app.review.split .colhead.b {
+  grid-column: 4;
+}
+
+.app.review.split .endcap::before {
+  grid-column: 2;
+}
+
+.app.review.split .endcap::after {
+  grid-column: 4;
+}
+
+.app.review.split .grid:not(.egrid) > .row.fold > .fold-btn {
+  grid-column: 2 / 5;
+}
+
+/* With connection bands, each column has its margin on its outer side. */
+.app.review.elastic .ecol.a > .row {
+  grid-template-columns: var(--mg) minmax(0, 1fr) var(--side-w);
+}
+
+.app.review.elastic .ecol.b > .row {
+  grid-template-columns: var(--side-w) minmax(0, 1fr) var(--mg);
+}
+
+.app.review.elastic .ecol.a .egut {
+  grid-column: 3;
+}
+
+.app.review.elastic .ecol.a > .row.gap::after {
+  left: var(--mg);
+}
+
+.app.review.elastic .ecol.b > .row.gap::after {
+  right: var(--mg);
+}
+
+.app.review.elastic .ecol > .row.fold > .fold-btn {
+  margin-inline: var(--mg);
+}
+
+.rail-btn,
+.rail-marks {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-3);
+  font: 600 11px/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.rail-btn .ico,
+.rail-marks .ico {
+  width: 15px;
+  height: 15px;
+}
+
+.rail-btn:hover,
+.rail-marks:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.rail-btn:focus-visible,
+.rail-marks:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The add button shows while its row is pointed at (or it has focus). */
+.rail-add {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.row:hover .rail-add,
+.rail-add:focus-visible {
+  opacity: 1;
+}
+
+.rail.sel .rail-btn {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.rail.sel .rail-btn:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.rail-marks .rx,
+.rail-marks .rn {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.rail-marks .rx.up {
+  color: var(--b);
+}
+
+.rail-marks .rx.down {
+  color: var(--a);
+}
+
+.rail-marks .rx.idea {
+  color: var(--amber);
+}
+
+.rail-marks .rn {
+  color: var(--accent);
+}
+
+.rail-marks .rh {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.rh.yellow,
+.rc-swatch.yellow {
+  background: var(--hl-yellow);
+}
+
+.rh.green,
+.rc-swatch.green {
+  background: var(--hl-green);
+}
+
+.rh.blue,
+.rc-swatch.blue {
+  background: var(--hl-blue);
+}
+
+.rh.pink,
+.rc-swatch.pink {
+  background: var(--hl-pink);
+}
+
+/* Marks kept while review mode is off: a dot on its button. */
+#btn-review {
+  position: relative;
+}
+
+#btn-review.has-marks::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* The card opened from a margin. */
+.pop.review {
+  width: min(340px, calc(100vw - 24px));
+  padding: 12px 14px 14px;
+}
+
+.review-card {
+  display: grid;
+  gap: 14px;
+}
+
+.rc-head {
+  display: grid;
+  gap: 4px;
+}
+
+.rc-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.rc-quote {
+  font: italic 14px/1.45 var(--font-doc);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.rc-section {
+  display: grid;
+  gap: 7px;
+}
+
+.rc-label {
+  font: 500 11px/1.2 var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.rc-reactions,
+.rc-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.rc-react {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink-2);
+  font: 500 12.5px/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.rc-react:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+
+.rc-react[aria-pressed='true'].up {
+  background: var(--b-tint);
+  border-color: var(--b);
+  color: var(--b);
+}
+
+.rc-react[aria-pressed='true'].down {
+  background: var(--a-tint);
+  border-color: var(--a);
+  color: var(--a);
+}
+
+.rc-react[aria-pressed='true'].idea {
+  background: var(--amber-tint);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+.rc-swatch {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.rc-swatch[aria-pressed='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.rc-clear {
+  margin-left: 4px;
+}
+
+.rc-notes {
+  display: grid;
+  gap: 8px;
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rc-note {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.rc-note-on {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+.rc-note-text {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.rc-note-foot {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.rc-when {
+  flex: 1;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.rc-text {
+  width: 100%;
+  min-height: 52px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 13.5px/1.45 var(--font-ui);
+}
+
+.rc-text:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.rc-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.rc-hint {
+  margin-right: auto;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+@media (min-width: 641px) {
+  /* Unified: one margin, right of the column, level with each version. */
+  .app.review.unified .topcap,
+  .app.review.unified .row,
+  .app.review.unified .endcap {
+    grid-template-columns: var(--ugut) minmax(0, 1fr) var(--mg);
+  }
+
+  .app.review.unified .row > .rail.a {
+    grid-area: 1 / 3;
+  }
+
+  .app.review.unified .row > .rail.b {
+    grid-area: 2 / 3;
+  }
+
+  .app.review.unified .rail.a {
+    justify-content: flex-start;
+    padding-left: 5px;
+    padding-right: 0;
+  }
+
+  .app.review.unified .row.k-eq > .rail.b,
+  .app.review.unified .row.k-teq > .rail.b,
+  .app.review.unified .row.k-tcap > .rail.b {
+    display: none;
+  }
+}
+
+/* The list of changes in review mode: a tab for the notes, and each change's marks. */
+.panel-tabs {
+  display: flex;
+  gap: 2px;
+  margin-right: auto;
+}
+
+.panel-tabs [role='tab'] {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink-3);
+  font: 600 14px/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.panel-tabs [role='tab']:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+
+.panel-tabs [role='tab'][aria-selected='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.chg-marks,
+.chg-marks .rn,
+.chg-marks .rx {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.chg-marks {
+  gap: 4px;
+  margin-left: 6px;
+  letter-spacing: 0;
+}
+
+.chg-counts + .chg-marks {
+  margin-left: 8px;
+}
+
+.chg-head > .chg-marks:first-of-type:not(.chg-counts + .chg-marks) {
+  margin-left: auto;
+}
+
+.chg-marks .rx.up {
+  color: var(--b);
+}
+
+.chg-marks .rx.down {
+  color: var(--a);
+}
+
+.chg-marks .rx.idea {
+  color: var(--amber);
+}
+
+.chg-marks .rn {
+  color: var(--accent);
+  font: 600 11px/1 var(--font-ui);
+}
+
+.notes-none {
+  margin: 0;
+  padding: 18px 16px;
+  color: var(--ink-3);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.chg-card.mark-card {
+  display: grid;
+  gap: 5px;
+}
+
+.mark-card .chg-head .rh {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  align-self: center;
+}
+
+.mark-where {
+  color: var(--ink-2);
+}
+
+.mark-when {
+  margin-left: auto;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.mark-quote {
+  font: italic 14px/1.45 var(--font-doc);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.mark-text {
+  font-size: 13.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.mark-card.lost {
+  opacity: 0.75;
+  cursor: default;
+}
+
+.mark-card.lost > .btn {
+  justify-self: start;
+}
+
+.notes-lost-head {
+  padding: 12px 4px 2px;
+  font: 600 11px/1.3 var(--font-ui);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* ---------------------------------------------------- spelling and grammar */
+
+.tgroup.check {
+  display: flex;
+  align-items: center;
+}
+
+#btn-check {
+  position: relative;
+}
+
+#btn-check-menu {
+  width: 18px;
+  min-width: 18px;
+  padding: 0;
+}
+
+.tbadge {
+  position: absolute;
+  top: 1px;
+  right: -2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--spell);
+  color: #fff;
+  font: 600 9.5px/15px var(--font-ui);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tgroup.check.busy #btn-check::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 2px solid var(--accent);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.check-menu {
+  gap: 4px;
+  padding: 4px 6px 6px;
+}
+
+.cm-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px 6px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.cm-lang {
+  justify-self: start;
+  margin: 0 4px 4px;
+}
+
+.cm-lang [role='radio'] {
+  width: auto;
+  padding: 0 10px;
+  font: 500 12.5px/1 var(--font-ui);
+}
+
+.cm-switch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 6px 4px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.cm-switch input {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.cm-switch small {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.cm-switch.off {
+  cursor: default;
+  color: var(--ink-3);
+}
+
+.cm-claude {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 6px;
+}
+
+.cm-progress {
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.cm-words {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.pop.issue {
+  min-width: 240px;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 12px 14px;
+}
+
+.issue-card {
+  display: grid;
+  gap: 8px;
+}
+
+.ic-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ic-kind {
+  padding: 3px 7px;
+  border-radius: 999px;
+  font: 600 11px/1 var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--a-tint);
+  color: var(--spell);
+}
+
+.ic-kind.grammar,
+.ic-kind.claude {
+  background: var(--chg-tint);
+  color: var(--grammar);
+}
+
+.ic-where {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.ic-message {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.ic-sugs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ic-sug {
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: 600 13.5px/1 var(--font-doc);
+  cursor: pointer;
+}
+
+.ic-sug:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.ic-sug:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ic-none,
+.ic-note {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.ic-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 2px -6px 0;
+}
+
+/* A phone has no room for a margin: marks still show in the text and the list of changes. */
+@media (max-width: 640px) {
+  .app.review .rail {
     display: none;
   }
 }

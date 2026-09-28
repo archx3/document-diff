@@ -93,7 +93,8 @@ test.describe('side by side with connection bands', () => {
   });
 
   test('copies a whole change with the arrow at the end of its band', async ({ page }) => {
-    const toB = line(page, 'b', 'This agreement is made on').locator('.act.to-b');
+    // A's arrow sends A's version across to B (and B's brings B's into A).
+    const toB = line(page, 'a', 'This agreement is made on').locator('.act.to-b');
     await expect(toB).toHaveAttribute('aria-label', 'Use A’s version in B');
     // Two chevrons, and no border or background until hovered, like the app bar's buttons.
     await expect(toB.locator('path')).toHaveAttribute('d', 'M8.67 4.67 12 8l-3.33 3.33M4 4.67 7.33 8 4 11.33');
@@ -105,8 +106,8 @@ test.describe('side by side with connection bands', () => {
     await page.keyboard.press('Control+z');
     await expect(counter(page)).toHaveText('Change 1 of 7');
     // One pair of arrows for each change.
-    await expect(page.locator('.ecol.a .act.to-a')).toHaveCount(7);
-    await expect(page.locator('.ecol.b .act.to-b')).toHaveCount(7);
+    await expect(page.locator('.ecol.a .act.to-b')).toHaveCount(7);
+    await expect(page.locator('.ecol.b .act.to-a')).toHaveCount(7);
   });
 
   test('shows line numbers beside each column and folds unchanged text', async ({ page }) => {

@@ -5,6 +5,7 @@ import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { Doc } from '../core/model';
 import { ACCEPTED_EXTENSIONS, acceptList, extensionOf, fileFormat, withArticle } from '../formats/extensions';
 import { handOffDocs, takeFiles } from '../lib/handoff';
+import { noteSource } from '../lib/sources';
 import { useFilePicker, usePageDrop } from './file-drop';
 import { Icon } from './icons';
 import styles from './new-comparison.module.css';
@@ -29,6 +30,7 @@ async function readDocument(file: File): Promise<{ doc: Doc; words: number }> {
   const [{ LoadError, loadFile }, { isBlank, wordCount }] = await Promise.all([import('../formats/load'), import('../core/model')]);
   const doc = await loadFile(file);
   if (!doc.blocks.some((b) => b.type !== 'marker' && !isBlank(b))) throw new LoadError(`"${file.name}" has no text to compare.`);
+  noteSource(doc, file);
   return { doc, words: wordCount(doc) };
 }
 

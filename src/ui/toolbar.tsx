@@ -181,10 +181,17 @@ interface ToolbarProps {
   lines: boolean;
   bands: boolean;
   sidebar: boolean;
+  /** Review mode, and how many marks there are (shown on its button while it is off). */
+  review: boolean;
+  marks: number;
+  /** Spelling and grammar checking, how many findings there are (null while it loads), and a Claude check under way. */
+  check: boolean;
+  issues: number | null;
+  checking: boolean;
   canUndo: boolean;
   canRedo: boolean;
   /** The toolbar menu that is open. */
-  menu: 'options' | 'copy' | null;
+  menu: 'options' | 'copy' | 'check' | null;
   /** What to say when the documents match. */
   same: string;
   onPrev: Click;
@@ -201,6 +208,9 @@ interface ToolbarProps {
   onRedo: Click;
   onCopy: Click;
   onSidebar: Click;
+  onReview: Click;
+  onCheck: Click;
+  onCheckMenu: Click;
 }
 
 /**
@@ -259,6 +269,37 @@ export function Toolbar(p: Readonly<ToolbarProps>) {
           disabled={!p.cmp}
           onClick={p.onOptions}
         />
+        <Tool
+          id="btn-review"
+          icon="review"
+          label="Review mode"
+          tip={p.review ? 'Review mode: notes, highlights and reactions in the margins' : p.marks ? `Review mode: show your ${p.marks === 1 ? 'mark' : `${p.marks} marks`}` : 'Review mode: add notes, highlights and reactions from the margins'}
+          kbd="R"
+          toggle
+          pressed={p.review && !!p.cmp}
+          className={!p.review && p.marks ? 'has-marks' : undefined}
+          disabled={!p.cmp}
+          onClick={p.onReview}
+        />
+        <div className={`tgroup check${p.checking ? ' busy' : ''}`}>
+          <Tool
+            id="btn-check"
+            icon="spell"
+            label="Spelling and grammar"
+            tip={p.check ? (p.issues === null ? 'Spelling and grammar: loading the dictionary' : `Spelling and grammar: ${p.issues === 0 ? 'no issues' : `${p.issues} to look at`}`) : 'Spelling and grammar: underline mistakes in both documents'}
+            kbd="G"
+            toggle
+            pressed={p.check && !!p.cmp}
+            disabled={!p.cmp}
+            onClick={p.onCheck}
+          >
+            <Ico name="spell" />
+            {p.check && !!p.issues && <span className="tbadge">{p.issues > 99 ? '99+' : p.issues}</span>}
+          </Tool>
+          <Tool id="btn-check-menu" icon="chevron" label="Spelling and grammar options" tip="Language, Claude and your dictionary" menu expanded={p.menu === 'check'} disabled={!p.cmp} onClick={p.onCheckMenu}>
+            <span />
+          </Tool>
+        </div>
         <hr className="tsep" aria-orientation="vertical" />
         <div className="tgroup pages">
           <TextTool id="btn-page-prev" text="Previous page" tip="Scroll up a screen" kbd="Page Up" keys="PageUp" disabled={p.nav.pageUp} onClick={p.onPagePrev} />
