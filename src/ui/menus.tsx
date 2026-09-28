@@ -39,7 +39,8 @@ export function Popover({ anchor, className = '', onClose, children }: PopoverPr
     pop.style.top = `${top}px`;
   }, [anchor]);
   useEffect(() => {
-    el.current?.querySelector<HTMLElement>('button, input')?.focus({ preventScroll: true });
+    const pop = el.current;
+    (pop?.querySelector<HTMLElement>('[data-autofocus]') ?? pop?.querySelector<HTMLElement>('button, input'))?.focus({ preventScroll: true });
   }, [anchor]);
   useEffect(() => {
     const down = (e: PointerEvent) => {

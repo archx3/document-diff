@@ -53,6 +53,19 @@ const PATHS = {
   contrast: '<circle cx="8" cy="8" r="5.75"/><path d="M8 2.25v11.5a5.75 5.75 0 0 0 0-11.5z" fill="currentColor" stroke="none"/>',
   /** A panel on the right with a list in it. */
   sidebar: '<rect x="1.75" y="2.5" width="12.5" height="11" rx="1.5"/><path d="M9.25 2.5v11"/><path d="M11.1 5.5h1.3M11.1 8h1.3M11.1 10.5h1.3"/>',
+  /** A note: a speech bubble. */
+  note: '<path d="M3.75 2.75h8.5a1.25 1.25 0 0 1 1.25 1.25v5.5a1.25 1.25 0 0 1-1.25 1.25H7.5L4.5 13.25v-2.5h-.75A1.25 1.25 0 0 1 2.5 9.5V4a1.25 1.25 0 0 1 1.25-1.25z"/>',
+  /** A highlighter pen and its stroke. */
+  highlighter: '<path d="M10.25 2.25 13.75 5.75 8 11.5 5.5 11.5 4.5 10.5 4.5 8z"/><path d="M7.75 4.75l3.5 3.5"/><path d="M4.5 10.5 2.5 12.5h3"/><path d="M8.5 13.75h5"/>',
+  thumbUp: '<path d="M5.25 7.25v6.5H2.75v-6.5z"/><path d="M5.25 7.25 7.9 2.6a1.35 1.35 0 0 1 2.47.95l-.52 2.7h2.65a1.25 1.25 0 0 1 1.22 1.5l-.9 4.8a1.5 1.5 0 0 1-1.47 1.2H5.25"/>',
+  thumbDown: '<path d="M5.25 8.75v-6.5H2.75v6.5z"/><path d="M5.25 8.75 7.9 13.4a1.35 1.35 0 0 0 2.47-.95l-.52-2.7h2.65a1.25 1.25 0 0 0 1.22-1.5l-.9-4.8a1.5 1.5 0 0 0-1.47-1.2H5.25"/>',
+  /** An idea: a light bulb. */
+  bulb: '<path d="M8 1.75a4.25 4.25 0 0 0-2.6 7.6c.55.43.85 1.08.85 1.77v.13h3.5v-.13c0-.69.3-1.34.85-1.77A4.25 4.25 0 0 0 8 1.75z"/><path d="M6.25 13h3.5M6.9 14.75h2.2"/>',
+  plus: '<path d="M8 3.25v9.5M3.25 8h9.5"/>',
+  trash: '<path d="M2.75 4.25h10.5M6.25 4.25V2.75h3.5v1.5M4.25 4.25l.6 9.25h6.3l.6-9.25"/><path d="M6.6 7v4M9.4 7v4"/>',
+  edit: '<path d="M10.5 2.75 13.25 5.5 6 12.75H3.25V10z"/><path d="M9 4.25 11.75 7"/>',
+  /** Review mode: a page with a note in its margin. */
+  review: '<rect x="1.75" y="2.25" width="8.5" height="11.5" rx="1.5"/><path d="M4 5.25h4M4 7.75h4M4 10.25h2.5"/><path d="M11.75 5.25h2.5v3.25h-1l-1.5 1.25z"/>',
   sun: '<circle cx="8" cy="8" r="2.75"/><path d="M8 1.5v1.25M8 13.25v1.25M1.5 8h1.25M13.25 8h1.25M3.4 3.4l.9.9M11.7 11.7l.9.9M3.4 12.6l.9-.9M11.7 4.3l.9-.9"/>',
   moon: '<path d="M13.5 9.6A5.75 5.75 0 1 1 6.4 2.5a4.6 4.6 0 0 0 7.1 7.1z"/>',
 };

@@ -5,7 +5,12 @@ import type { Comparison, Row } from '../core/compare';
 import { computeListLabels } from '../core/lists';
 import type { Dir } from '../core/merge';
 import { optionsKey } from '../core/tokens';
+import type { MarginInfo } from '../review/marks';
+import { marginKey, marginSig } from '../review/marks';
 import type { ElasticLayout } from './elastic';
+import type { ReviewView } from './grid';
+import { selectedIn } from './grid';
+import { Rail, RailSpace } from './rail';
 import type { Labels } from './render';
 import type { ActKind, GridItem, RowPart } from './rows';
 import { actLabels, numbering, rowParts } from './rows';
@@ -20,6 +25,8 @@ export interface ElasticGridProps {
   onFold(key: string): void;
   onInline(anchor: HTMLElement, rowKey: string, change: number): void;
   onPick(hunk: number): void;
+  /** Review mode's margins, or null when it is off. */
+  review: ReviewView | null;
   ref?: Ref<HTMLDivElement>;
 }
 
@@ -35,6 +42,8 @@ type Line =
       nb: string;
       /** On a change's first line: the arrows that copy the change across. */
       arrow: ActKind | null;
+      /** The row's first line (where its marks go). */
+      first: boolean;
     }
   | { type: 'fold'; key: string; foldKey: string; count: number };
 
@@ -47,7 +56,7 @@ const GAP_B = new Set(['del', 'tdel']);
  * bands joining the changes. The ElasticLayout lines the columns up as the page
  * scrolls; this renders them.
  */
-export const ElasticGrid = memo(function ElasticGrid({ cmp, items, current, layout, onCopyHunk, onFold, onInline, onPick, ref }: ElasticGridProps) {
+export const ElasticGrid = memo(function ElasticGrid({ cmp, items, current, layout, onCopyHunk, onFold, onInline, onPick, review, ref }: ElasticGridProps) {
   const el = useRef<HTMLDivElement | null>(null);
   const colA = useRef<HTMLDivElement>(null);
   const colB = useRef<HTMLDivElement>(null);
@@ -80,7 +89,7 @@ export const ElasticGrid = memo(function ElasticGrid({ cmp, items, current, layo
       const nb = row.r ? String(numB.get(row.r) ?? '') : '';
       hit.parts.forEach((part, i) => {
         const first = i === 0 && row.hunk >= 0 && row.hunk !== prevHunk;
-        out.push({ type: 'part', key: `${row.key}#${i}`, row, part, na: i === 0 ? na : '', nb: i === 0 ? nb : '', arrow: first ? hunkKind(cmp, row.hunk) : null });
+        out.push({ type: 'part', key: `${row.key}#${i}`, row, part, na: i === 0 ? na : '', nb: i === 0 ? nb : '', arrow: first ? hunkKind(cmp, row.hunk) : null, first: i === 0 });
       });
       prevHunk = row.hunk;
     }
@@ -127,7 +136,23 @@ export const ElasticGrid = memo(function ElasticGrid({ cmp, items, current, layo
   };
 
   const column = (side: 'a' | 'b') =>
-    lines.map((line) => <SideLine key={line.key} line={line} side={side} cur={line.type === 'part' && line.row.hunk >= 0 && line.row.hunk === current} onCopyHunk={onCopyHunk} onFold={onFold} />);
+    lines.map((line) => {
+      const part = line.type === 'part';
+      const sel = part && review ? selectedIn(review, line.row.key) : null;
+      return (
+        <SideLine
+          key={line.key}
+          line={line}
+          side={side}
+          cur={part && line.row.hunk >= 0 && line.row.hunk === current}
+          onCopyHunk={onCopyHunk}
+          onFold={onFold}
+          review={review}
+          rail={part && line.first ? review?.margins.get(marginKey(line.row.key, side)) : undefined}
+          selected={part && sel === `${line.part.anchor}|${side}`}
+        />
+      );
+    });
   return (
     <div
       className={`grid egrid${cmp.left.mono ? ' mono-a' : ''}${cmp.right.mono ? ' mono-b' : ''}`}
@@ -173,11 +198,16 @@ interface SideLineProps {
   cur: boolean;
   onCopyHunk: ElasticGridProps['onCopyHunk'];
   onFold: ElasticGridProps['onFold'];
+  review: ReviewView | null;
+  /** The marks beside this line (its row's first line). */
+  rail?: MarginInfo;
+  /** Text in this line is selected. */
+  selected: boolean;
 }
 
 /** One line in one column: the text and this column's part of the gutter, or where the other side's text would go. */
 const SideLine = memo(
-  function SideLine({ line, side, cur, onCopyHunk, onFold }: SideLineProps) {
+  function SideLine({ line, side, cur, onCopyHunk, onFold, review, rail, selected }: SideLineProps) {
     if (line.type === 'fold') {
       // One fold, shown in both columns: the second is for the eye only.
       const hidden = side === 'b';
@@ -196,6 +226,9 @@ const SideLine = memo(
     }
     const { row, part } = line;
     const gap = (side === 'a' ? GAP_A : GAP_B).has(part.kind);
+    // The margin outside the document, where there is text beside it.
+    const margin =
+      !review || gap ? null : line.first || selected ? <Rail side={side} rowKey={row.key} info={rail} selected={selected} actions={review.actions} /> : <RailSpace side={side} />;
     const n = side === 'a' ? line.na : line.nb;
     const gut = (
       <div className="egut" data-n={n || undefined}>
@@ -211,18 +244,27 @@ const SideLine = memo(
         data-la={part.la}
         data-lb={part.lb}
       >
+        {side === 'a' && margin}
         {side === 'b' && gut}
         {!gap && <div className={`cell ${side}`} dangerouslySetInnerHTML={{ __html: side === 'a' ? part.a : part.b }} />}
         {side === 'a' && gut}
+        {side === 'b' && margin}
       </div>
     );
   },
-  (p, q) => p.side === q.side && p.cur === q.cur && sameLine(p.line, q.line),
+  (p, q) =>
+    p.side === q.side &&
+    p.cur === q.cur &&
+    sameLine(p.line, q.line) &&
+    !!p.review === !!q.review &&
+    p.review?.actions === q.review?.actions &&
+    marginSig(p.rail) === marginSig(q.rail) &&
+    p.selected === q.selected,
 );
 
 function sameLine(x: Line, y: Line): boolean {
   if (x.type === 'fold' || y.type === 'fold') return x.type === y.type && x.key === y.key && (x as { count: number }).count === (y as { count: number }).count;
-  return x.part === y.part && x.row.hunk === y.row.hunk && x.na === y.na && x.nb === y.nb && x.arrow === y.arrow;
+  return x.part === y.part && x.row.hunk === y.row.hunk && x.na === y.na && x.nb === y.nb && x.arrow === y.arrow && x.first === y.first;
 }
 
 /** The arrow on one side of a change: A's pulls B's version in, B's pulls A's. */

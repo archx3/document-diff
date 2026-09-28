@@ -181,6 +181,9 @@ interface ToolbarProps {
   lines: boolean;
   bands: boolean;
   sidebar: boolean;
+  /** Review mode, and how many marks there are (shown on its button while it is off). */
+  review: boolean;
+  marks: number;
   canUndo: boolean;
   canRedo: boolean;
   /** The toolbar menu that is open. */
@@ -201,6 +204,7 @@ interface ToolbarProps {
   onRedo: Click;
   onCopy: Click;
   onSidebar: Click;
+  onReview: Click;
 }
 
 /**
@@ -258,6 +262,18 @@ export function Toolbar(p: Readonly<ToolbarProps>) {
           expanded={p.menu === 'options'}
           disabled={!p.cmp}
           onClick={p.onOptions}
+        />
+        <Tool
+          id="btn-review"
+          icon="review"
+          label="Review mode"
+          tip={p.review ? 'Review mode: notes, highlights and reactions in the margins' : p.marks ? `Review mode: show your ${p.marks === 1 ? 'mark' : `${p.marks} marks`}` : 'Review mode: add notes, highlights and reactions from the margins'}
+          kbd="R"
+          toggle
+          pressed={p.review && !!p.cmp}
+          className={!p.review && p.marks ? 'has-marks' : undefined}
+          disabled={!p.cmp}
+          onClick={p.onReview}
         />
         <hr className="tsep" aria-orientation="vertical" />
         <div className="tgroup pages">

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { ChangeEvent, ReactNode } from 'react';
+import type { ChangeEvent, MouseEvent, ReactNode } from 'react';
 import { compareDocs, inlineDiff } from '../core/compare';
 import { fullRange } from '../core/inline';
 import type { Dir, Selection } from '../core/merge';
@@ -16,7 +16,13 @@ import { ACCEPTED_EXTENSIONS, LoadError, loadFile, loadPaste } from '../formats/
 import { odtBackend } from '../formats/odt/backend';
 import { OdtPackage } from '../formats/odt/package';
 import { noteSource } from '../lib/sources';
+import type { TextTarget } from '../review/anchor';
+import { blockStream, changeTarget, findText, textTarget } from '../review/anchor';
+import { noteAt, paintMarks, selectionTarget } from '../review/dom';
+import type { HighlightColor, HighlightMark, Mark, NoteMark, Placed, ReactionMark } from '../review/marks';
+import { margins, markId, placeMarks, readMarks, streamsOf, swapMarks, toggleReaction } from '../review/marks';
 import { SAMPLE_A, SAMPLE_A_NAME, SAMPLE_B, SAMPLE_B_NAME } from '../samples/sample';
+import type { ChangeMarks, PanelMark, PanelReview } from './changes-panel';
 import { ChangesPanel } from './changes-panel';
 import type { DialogState } from './dialogs';
 import { Dialog, GoogleDocDialog, HelpDialog, PasteDialog } from './dialogs';
@@ -26,7 +32,7 @@ import { EmptyState } from './empty';
 import { exportDocument, printDocument } from './export';
 import { ElasticLayout } from './elastic';
 import { ElasticGrid } from './elastic-grid';
-import type { Place } from './grid';
+import type { Place, ReviewView } from './grid';
 import { DocumentGrid, KeepPlace } from './grid';
 import type { DocMenu } from './heads';
 import { ColumnHeads } from './heads';
@@ -38,6 +44,9 @@ import { CopyMenu, ExportMenu, InlineMenu, LoadMenu, OptionsMenu, Popover } from
 import type { Notice } from './notices';
 import { Notices } from './notices';
 import { Overview } from './overview';
+import type { RailActions } from './rail';
+import type { CardNote, ReviewContext } from './review-card';
+import { ReviewCard } from './review-card';
 import { gridItems } from './rows';
 import type { Restored, SessionScope } from './session';
 import { SessionWriter } from './session';
@@ -69,6 +78,8 @@ interface Prefs {
   bands: boolean;
   lowContrast: boolean;
   sidebar: boolean;
+  /** Review mode: notes, highlights and reactions, and the margins to add them from. */
+  review: boolean;
 }
 
 function panelOverlays(): boolean {
@@ -90,7 +101,7 @@ function useMedia(query: string): boolean {
 }
 
 function loadPrefs(): Prefs {
-  const prefs: Prefs = { opts: { ...DEFAULT_OPTIONS }, changesOnly: false, view: 'split', minimap: false, lines: false, bands: true, lowContrast: false, sidebar: false };
+  const prefs: Prefs = { opts: { ...DEFAULT_OPTIONS }, changesOnly: false, view: 'split', minimap: false, lines: false, bands: true, lowContrast: false, sidebar: false, review: false };
   try {
     const raw = localStorage.getItem(PREFS_KEY);
     if (!raw) return prefs;
@@ -105,6 +116,7 @@ function loadPrefs(): Prefs {
       lowContrast: !!p.lowContrast,
       // An open list would cover a narrow screen's documents; it opens on request there.
       sidebar: !!p.sidebar && !panelOverlays(),
+      review: !!p.review,
     };
   } catch {
     /* storage unavailable */
@@ -129,7 +141,9 @@ function withDoc(docs: Docs, side: Side, doc: Doc | null, edits: number): Docs {
 type Pop =
   | { type: 'load' | 'export'; side: Side; anchor: HTMLElement }
   | { type: 'options' | 'copy'; anchor: HTMLElement }
-  | { type: 'inline'; anchor: HTMLElement; rowKey: string; change: number };
+  | { type: 'inline'; anchor: HTMLElement; rowKey: string; change: number }
+  /** The marks on one side of a row, from its margin; `selection` is the selected text it was opened for. */
+  | { type: 'review'; anchor: HTMLElement; rowKey: string; side: Side; selection: TextTarget | null; writing: boolean };
 
 export interface CompareAppProps {
   /** Documents to compare straight away. */
@@ -151,7 +165,7 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
   );
   const { a, b, edits } = history.now;
   const [prefs, setPrefs] = useState(loadPrefs);
-  const { opts, changesOnly, minimap, lines, bands, lowContrast, sidebar } = prefs;
+  const { opts, changesOnly, minimap, lines, bands, lowContrast, sidebar, review } = prefs;
   // A phone has room for one column only.
   const phone = useMedia(PHONE);
   const view: View = phone ? 'unified' : prefs.view;
@@ -184,6 +198,17 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
   // With no changes there is nothing to fold away.
   const items = useMemo(() => (cmp ? gridItems(cmp.rows, changesOnly && n > 0, expanded) : []), [cmp, changesOnly, n, expanded]);
   const same = sameText(opts);
+
+  /* ------------------------------------------------------------ review */
+
+  const [marks, setMarks] = useState<Mark[]>(() => readMarks(restored?.extra.review));
+  /** The line with text selected in it, as "anchor|side": review mode offers to mark it from its margin. */
+  const [selLine, setSelLine] = useState<string | null>(null);
+  const lastColor = useRef<HighlightColor>('yellow');
+  /** Where each note's text is on the page, as last painted. */
+  const noteRanges = useRef<Map<string, Range[]>>(new Map());
+  const placed = useMemo(() => (cmp && review ? placeMarks(marks, cmp) : []), [cmp, marks, review]);
+  const marginMap = useMemo(() => margins(placed), [placed]);
 
   const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -298,6 +323,7 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
 
   const saveView = () => sessionWriter.view({ current: cur, scrollTop: scroller.current?.scrollTop ?? 0 });
   useEffect(() => sessionWriter.docs(history.now), [sessionWriter, history.now]);
+  useEffect(() => sessionWriter.extra({ review: marks }), [sessionWriter, marks]);
   useEffect(saveView, [cur]);
   useEffect(() => {
     // A reload or a closed tab writes what is still waiting.
@@ -320,7 +346,7 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
   }, []);
 
   // Widening the gutter or the list of changes, or changing the view, moves every row.
-  useLayoutEffect(() => layout.invalidate(), [layout, minimap, lines, sidebar, view]);
+  useLayoutEffect(() => layout.invalidate(), [layout, minimap, lines, sidebar, view, review]);
 
   const setCurrent = (h: number, scroll: boolean) => {
     setCurrentState(h);
@@ -421,15 +447,18 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
     const now = history.latest();
     if (!now.a && !now.b) return;
     history.commit('Swap A and B', { ...now, a: now.b, b: now.a, edits: { a: now.edits.b, b: now.edits.a } });
+    setMarks((ms) => swapMarks(ms));
   };
 
   const startOver = () => {
     const now = history.latest();
     if (now.a || now.b) history.commit('New comparison', NO_DOCS);
+    setMarks([]);
   };
 
   const loadSamples = () => {
     history.commit('Load samples', sampleDocs());
+    setMarks([]);
     setCurrentState(0);
   };
 
@@ -503,6 +532,219 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
     e.currentTarget.value = '';
     if (files.length) void loadFiles(files, fileTarget.current);
   };
+
+  /* ------------------------------------------------------ review marks */
+
+  /** The selected text in one document, as a text target. */
+  const selectedTarget = (side: Side) => {
+    const g = grid.current;
+    return cmp && g ? selectionTarget(g, document.getSelection(), cmp, streamsOf(cmp), side) : null;
+  };
+
+  /** A whole paragraph (or table) of one side of a row, as a text target. */
+  const paragraphTarget = (side: Side, rowKey: string): TextTarget | null => {
+    const row = cmp?.rows.find((r) => r.key === rowKey);
+    const block = row && (side === 'a' ? row.l : row.r);
+    if (!cmp || !block) return null;
+    const s = streamsOf(cmp)[side];
+    const i = s.blocks.indexOf(block);
+    const text = blockStream(block);
+    return i < 0 || !text ? null : textTarget(s, side, s.starts[i]!, s.starts[i]! + text.length);
+  };
+
+  /** Highlights text in a colour (or with null, clears it), replacing the highlights it overlaps. */
+  const highlight = (target: TextTarget, color: HighlightColor | null) => {
+    if (!cmp) return;
+    const s = streamsOf(cmp)[target.side];
+    const at = findText(s, target);
+    setMarks((ms) => {
+      const kept = ms.filter((m) => {
+        if (m.kind !== 'highlight' || m.target.side !== target.side || !at) return true;
+        const o = findText(s, m.target);
+        return !o || o.end <= at.start || o.start >= at.end;
+      });
+      if (color) {
+        lastColor.current = color;
+        kept.push({ id: markId(), kind: 'highlight', target, color, created: Date.now() });
+      }
+      return kept;
+    });
+  };
+
+  const railOpen = useStable((anchor: HTMLElement, rowKey: string, side: Side) => openPop({ type: 'review', anchor, rowKey, side, selection: null, writing: false }));
+  const railQuick = useStable((what: 'highlight' | 'note', anchor: HTMLElement, _rowKey: string, side: Side) => {
+    const sel = selectedTarget(side);
+    if (!sel) return;
+    if (what === 'highlight') {
+      highlight(sel.target, lastColor.current);
+      document.getSelection()?.removeAllRanges();
+    } else {
+      openPop({ type: 'review', anchor, rowKey: sel.rowKey, side, selection: sel.target, writing: true });
+    }
+  });
+  const railActions = useMemo<RailActions>(() => ({ open: railOpen, quick: railQuick }), [railOpen, railQuick]);
+  const reviewView = useMemo<ReviewView | null>(
+    () => (review && cmp ? { margins: marginMap, selected: selLine, actions: railActions } : null),
+    [review, cmp, marginMap, selLine, railActions],
+  );
+
+  /** What the card opened from a margin is about, and the marks already there. */
+  const reviewContext = (p: Extract<Pop, { type: 'review' }>): ReviewContext | null => {
+    const row = cmp?.rows.find((r) => r.key === p.rowKey);
+    if (!cmp || !row) return null;
+    const block = p.side === 'a' ? row.l : row.r;
+    const hunk = row.hunk;
+    const onChange = (pl: Placed) => pl.mark.target.type === 'change' && hunk >= 0 && pl.hunk === hunk;
+    const onRow = (pl: Placed) => pl.side === p.side && !!pl.parts?.some((x) => x.rowKey === p.rowKey);
+    const here = placed.filter((pl) => pl.found && (onChange(pl) || onRow(pl)));
+    const notes: CardNote[] = here
+      .filter((pl): pl is Placed & { mark: NoteMark } => pl.mark.kind === 'note')
+      .map(({ mark: m }) => ({ id: m.id, text: m.text, quote: m.target.type === 'text' ? m.target.quote : undefined, onChange: m.target.type === 'change', created: m.created, updated: m.updated }));
+    const reactions = here.filter((pl): pl is Placed & { mark: ReactionMark } => pl.mark.kind === 'reaction').map((pl) => pl.mark.reaction);
+    const highlights = [...new Set(here.filter((pl): pl is Placed & { mark: HighlightMark } => pl.mark.kind === 'highlight').map((pl) => pl.mark.color))];
+    return {
+      side: p.side,
+      rowKey: p.rowKey,
+      hunk,
+      what: p.selection ? 'selection' : hunk >= 0 ? 'change' : 'paragraph',
+      quote: p.selection?.quote ?? (block ? blockStream(block) : ''),
+      notes,
+      reactions,
+      highlights,
+      writing: p.writing,
+    };
+  };
+
+  const reviewCard = (p: Extract<Pop, { type: 'review' }>, ctx: ReviewContext) => {
+    const target = () => p.selection ?? (ctx.hunk >= 0 && cmp ? changeTarget(cmp, ctx.hunk) : paragraphTarget(p.side, p.rowKey));
+    return (
+      <ReviewCard
+        key={`${p.rowKey}|${p.side}|${p.selection?.pos ?? ''}`}
+        ctx={ctx}
+        onReact={(r) => {
+          if (cmp && ctx.hunk >= 0) setMarks((ms) => toggleReaction(ms, changeTarget(cmp, ctx.hunk), ctx.hunk, cmp, r));
+        }}
+        onHighlight={(color) => {
+          const t = p.selection ?? paragraphTarget(p.side, p.rowKey);
+          if (t) highlight(t, color);
+        }}
+        onAddNote={(text) => {
+          const t = target();
+          if (t) setMarks((ms) => [...ms, { id: markId(), kind: 'note', target: t, text, created: Date.now() }]);
+        }}
+        onEditNote={(id, text) => setMarks((ms) => ms.map((m) => (m.id === id && m.kind === 'note' ? { ...m, text, updated: Date.now() } : m)))}
+        onDelete={(id) => setMarks((ms) => ms.filter((m) => m.id !== id))}
+      />
+    );
+  };
+
+  /** Scrolls a row into view, showing it first if it is folded away. */
+  const goToRow = (rowKey: string) => {
+    if (!cmp) return;
+    const at = cmp.rows.findIndex((r) => r.key === rowKey);
+    let fold: string | null = null;
+    for (const it of items) {
+      if (it.type !== 'fold') continue;
+      const from = cmp.rows.findIndex((r) => r.key === it.key);
+      if (from <= at && at < from + it.count) fold = it.key;
+    }
+    const show = () => place.restore([{ id: rowKey, offset: (heads.current?.offsetHeight ?? 0) + 48 }]);
+    userScrolled.current = true;
+    if (fold) {
+      const key = fold;
+      setExpanded((e) => new Set(e).add(key));
+      afterRender.current = show;
+    } else show();
+    if (panelOverlays()) setPref({ sidebar: false });
+  };
+
+  const panelReview = useMemo<PanelReview | null>(() => {
+    if (!review || !cmp) return null;
+    const byHunk = new Map<number, ChangeMarks>();
+    const order = new Map(cmp.rows.map((r, i) => [r.key, i]));
+    const list: PanelMark[] = [];
+    for (const p of placed) {
+      const m = p.mark;
+      if (p.found && p.hunk >= 0 && m.kind !== 'highlight') {
+        let c = byHunk.get(p.hunk);
+        if (!c) byHunk.set(p.hunk, (c = { reactions: [], notes: 0 }));
+        if (m.kind === 'reaction') c.reactions.push(m.reaction);
+        else c.notes++;
+      }
+      if (m.kind === 'reaction') continue;
+      list.push({
+        id: m.id,
+        kind: m.kind,
+        found: p.found,
+        hunk: p.hunk,
+        side: p.side,
+        rowKey: p.rowKey,
+        quote: m.target.type === 'text' ? m.target.quote : undefined,
+        text: m.kind === 'note' ? m.text : undefined,
+        color: m.kind === 'highlight' ? m.color : undefined,
+        created: m.created,
+      });
+    }
+    list.sort((x, y) => (order.get(x.rowKey ?? '') ?? Infinity) - (order.get(y.rowKey ?? '') ?? Infinity));
+    return {
+      byHunk,
+      marks: list,
+      onGo: (m) => {
+        if (m.hunk >= 0 && !m.side) goToChange(m.hunk);
+        else if (m.rowKey) goToRow(m.rowKey);
+      },
+      onDelete: (id) => setMarks((ms) => ms.filter((x) => x.id !== id)),
+    };
+    // goToChange and goToRow read the latest state when called.
+  }, [review, cmp, placed]);
+
+  // Marked text is coloured on the page; while a card is open for some selected text, that text too.
+  useLayoutEffect(() => {
+    const focus = pop?.type === 'review' && pop.selection && cmp ? placeMarks([{ id: 'focus', kind: 'note', target: pop.selection, text: '', created: 0 }], cmp) : [];
+    noteRanges.current = paintMarks(review ? grid.current : null, placed, focus);
+  });
+
+  /** A click on noted text opens its card, as a comment in a word processor does. */
+  const onNoteClick = (e: MouseEvent) => {
+    if (!review || !noteRanges.current.size) return;
+    const sel = document.getSelection();
+    if (sel && !sel.isCollapsed) return;
+    const id = noteAt(noteRanges.current, e.clientX, e.clientY);
+    const p = id ? placed.find((x) => x.mark.id === id) : undefined;
+    if (!p?.rowKey || !p.side) return;
+    const button = grid.current?.querySelector<HTMLElement>(`.row[data-key="${CSS.escape(p.rowKey)}"] > .rail.${p.side} button`);
+    if (!button) return;
+    e.stopPropagation();
+    openPop({ type: 'review', anchor: button, rowKey: p.rowKey, side: p.side, selection: null, writing: false });
+  };
+
+  // In review mode, the margin beside selected text offers to highlight it or add a note.
+  useEffect(() => {
+    if (!review) {
+      setSelLine(null);
+      return;
+    }
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const sel = document.getSelection();
+      let next: string | null = null;
+      const node = sel && !sel.isCollapsed ? sel.focusNode : null;
+      const el = node && (node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement);
+      const cell = el?.closest('.cell.a, .cell.b');
+      const row = cell?.closest<HTMLElement>('.row');
+      if (cell && row?.dataset.a && grid.current?.contains(row)) next = `${row.dataset.a}|${cell.classList.contains('a') ? 'a' : 'b'}`;
+      setSelLine((prev) => (prev === next ? prev : next));
+    };
+    const onChange = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    document.addEventListener('selectionchange', onChange);
+    return () => {
+      document.removeEventListener('selectionchange', onChange);
+      cancelAnimationFrame(frame);
+    };
+  }, [review]);
 
   /* -------------------------------------------------------------- view */
 
@@ -642,6 +884,9 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
       case 's':
         toggleSidebar();
         break;
+      case 'r':
+        if (cmp) setPref({ review: !review });
+        break;
       case '?':
         openDialog({ type: 'help' });
         break;
@@ -762,6 +1007,10 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
   else if (pop?.type === 'options') {
     menuClass = 'wide';
     menu = <OptionsMenu opts={opts} onChange={(o) => setPref({ opts: o })} />;
+  } else if (pop?.type === 'review') {
+    const ctx = reviewContext(pop);
+    menuClass = 'review';
+    if (ctx) menu = reviewCard(pop, ctx);
   } else if (pop?.type === 'inline') {
     const words = inlineWords(pop.rowKey, pop.change);
     menuClass = 'inline';
@@ -782,7 +1031,9 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
   else if (dialog?.type === 'gdoc') dialogBody = <GoogleDocDialog side={dialog.side} presetId={dialog.presetId} onLoad={startLoad} />;
   else if (dialog?.type === 'help') dialogBody = <HelpDialog />;
 
-  const appClass = ['app', view, elastic && 'elastic', minimap && 'with-map', lines && 'with-lines', lowContrast && 'lowc', !cmp && 'is-empty', busy && 'is-busy'].filter(Boolean).join(' ');
+  const appClass = ['app', view, elastic && 'elastic', minimap && 'with-map', lines && 'with-lines', lowContrast && 'lowc', review && cmp && 'review', !cmp && 'is-empty', busy && 'is-busy']
+    .filter(Boolean)
+    .join(' ');
   const openId = pop && (pop.type === 'load' || pop.type === 'export') ? `${pop.type}-${pop.side}` : null;
   return (
     <div className={appClass} data-busy={busy || undefined} ref={root}>
@@ -807,6 +1058,8 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
         lines={lines}
         bands={bands}
         sidebar={sidebar}
+        review={review}
+        marks={marks.length}
         canUndo={history.canUndo}
         canRedo={history.canRedo}
         menu={pop?.type === 'options' || pop?.type === 'copy' ? pop.type : null}
@@ -825,6 +1078,7 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
         onRedo={redo}
         onCopy={(e) => openPop({ type: 'copy', anchor: e.currentTarget })}
         onSidebar={() => toggleSidebar()}
+        onReview={() => setPref({ review: !review })}
       />
       <Notices notices={notes.filter((x) => !dismissed.has(x.key))} onDismiss={(key) => setDismissed((d) => new Set(d).add(key))} />
       <main className="stage" id="stage">
@@ -839,6 +1093,7 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
                 scheduleNav();
                 saveView();
               }}
+              onClickCapture={onNoteClick}
               onWheel={manual}
               onTouchMove={manual}
               // A press on the scroller itself (not its content) is the scrollbar.
@@ -847,17 +1102,39 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
             >
               <ColumnHeads a={a} b={b} edits={edits} cmp={cmp} current={cur} open={openId} onMenu={openDocMenu} ref={heads} />
               {view === 'unified' && <div className="topcap" />}
-              <KeepPlace place={place} watch={[items, minimap, lines, sidebar, view, elastic]}>
+              <KeepPlace place={place} watch={[items, minimap, lines, sidebar, view, elastic, review]}>
                 {elastic ? (
-                  <ElasticGrid cmp={cmp} items={items} current={cur} layout={elasticLayout} onCopyHunk={copyHunk} onFold={onFold} onInline={onInline} onPick={onPick} ref={grid} />
+                  <ElasticGrid
+                    cmp={cmp}
+                    items={items}
+                    current={cur}
+                    layout={elasticLayout}
+                    onCopyHunk={copyHunk}
+                    onFold={onFold}
+                    onInline={onInline}
+                    onPick={onPick}
+                    review={reviewView}
+                    ref={grid}
+                  />
                 ) : (
-                  <DocumentGrid cmp={cmp} items={items} current={cur} onCopy={copyRow} onFold={onFold} onInline={onInline} onPick={onPick} onRender={onGridRender} ref={grid} />
+                  <DocumentGrid
+                    cmp={cmp}
+                    items={items}
+                    current={cur}
+                    onCopy={copyRow}
+                    onFold={onFold}
+                    onInline={onInline}
+                    onPick={onPick}
+                    onRender={onGridRender}
+                    review={reviewView}
+                    ref={grid}
+                  />
                 )}
               </KeepPlace>
               {!elastic && <div className="endcap" />}
             </div>
             <Overview layout={lay} scroller={scroller} current={cur} minimap={minimap} palette={`${dark}:${lowContrast}`} onGo={onOverviewGo} onScrolled={onOverviewScrolled} />
-            {sidebar && <ChangesPanel cmp={cmp} current={cur} same={same} onGo={goToChange} onClose={closeSidebar} />}
+            {sidebar && <ChangesPanel cmp={cmp} current={cur} same={same} onGo={goToChange} onClose={closeSidebar} review={panelReview} />}
           </>
         ) : (
           <EmptyState a={a} b={b} onLoad={startLoad} onMenu={openDocMenu} onSamples={loadSamples} />
