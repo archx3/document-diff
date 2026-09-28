@@ -119,14 +119,15 @@ test.describe('side by side with connection bands', () => {
     await expect(page.locator('.ecol.b .row.fold .fold-btn').first()).toHaveAttribute('aria-hidden', 'true');
   });
 
-  test('in low contrast, the current change has no borders and the bands a line all round', async ({ page }) => {
+  test('in low contrast, neither the current change nor the bands have lines', async ({ page }) => {
+    await expect(page.locator('.bands .band-edge').first()).toBeVisible();
     await page.locator('#btn-contrast').click();
     const cell = line(page, 'a', 'This agreement is made on').locator('.cell');
     await expect(line(page, 'a', 'This agreement is made on')).toHaveClass(/\bcur\b/);
     expect(await cell.evaluate((el) => getComputedStyle(el).borderRightColor)).toBe('rgba(0, 0, 0, 0)');
-    const outline = page.locator('.bands .band-line[class*="cur"]');
-    expect(await outline.evaluate((el) => getComputedStyle(el).display)).not.toBe('none');
-    expect(await page.locator('.bands .band-edge').first().evaluate((el) => getComputedStyle(el).display)).toBe('none');
+    // The bands are their colour alone.
+    for (const edge of await page.locator('.bands .band-edge').all()) await expect(edge).toBeHidden();
+    await expect(page.locator('.bands .band').first()).toBeVisible();
   });
 
   test('goes to each change in turn, and B turns the bands off', async ({ page }) => {

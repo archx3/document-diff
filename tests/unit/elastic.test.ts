@@ -64,11 +64,9 @@ describe('connection bands', () => {
   });
 
   it('draws a band as an S from one side’s range to the other’s', () => {
-    const { fill, edges, outline } = bandPath(20, 80, 100, 10, 30, 50, 90);
+    const { fill, edges } = bandPath(20, 80, 100, 10, 30, 50, 90);
     expect(fill).toBe('M0 10H20C50 10 50 50 80 50H100V90H80C50 90 50 30 20 30H0Z');
     expect(edges).toBe('M0 10H20C50 10 50 50 80 50H100M0 30H20C50 30 50 90 80 90H100');
-    // The outline's ends are just inside the gutter.
-    expect(outline).toBe('M0.8 10H20C50 10 50 50 80 50H99.3V90H80C50 90 50 30 20 30H0.8Z');
     // Where one side has nothing, its edges meet: a line marks the place.
     expect(bandPath(20, 80, 100, 10, 10, 50, 90).fill).toContain('M0 10H20');
   });
