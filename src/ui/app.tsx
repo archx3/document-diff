@@ -4,7 +4,7 @@ import { compareDocs, inlineDiff } from '../core/compare';
 import { fullRange } from '../core/inline';
 import type { Dir, Selection } from '../core/merge';
 import { applySelection, selectAll, selectHunk, selectInline, selectRows, selectTableRow } from '../core/merge';
-import type { Doc } from '../core/model';
+import type { Block, Doc } from '../core/model';
 import { isBlank } from '../core/model';
 import { modelBackend } from '../core/model-backend';
 import type { CompareOptions } from '../core/tokens';
@@ -15,15 +15,25 @@ import { readHtml } from '../formats/html/read';
 import { ACCEPTED_EXTENSIONS, LoadError, loadFile, loadPaste } from '../formats/load';
 import { odtBackend } from '../formats/odt/backend';
 import { OdtPackage } from '../formats/odt/package';
+import type { Ignores, Issue } from '../check/check';
+import { ignoreKey } from '../check/check';
+import { batches, claudeCheck, claudeError, claudeSampler } from '../check/claude';
+import { replaceInParagraph } from '../check/edit';
+import type { ClaudeFindings, PlacedIssue } from '../check/place';
+import { countIssues, placeIssues } from '../check/place';
+import type { Lang, Speller } from '../check/spell';
+import { loadSpeller } from '../check/spell';
 import { noteSource } from '../lib/sources';
 import type { TextTarget } from '../review/anchor';
-import { blockStream, changeTarget, findText, textTarget } from '../review/anchor';
-import { noteAt, paintMarks, selectionTarget } from '../review/dom';
+import { blockStream, changeTarget, findText, hashText, textTarget } from '../review/anchor';
+import { paintMarks, paintRanges, rangeAt, segmentRange, selectionTarget } from '../review/dom';
 import type { HighlightColor, HighlightMark, Mark, NoteMark, Placed, ReactionMark } from '../review/marks';
 import { margins, markId, placeMarks, readMarks, streamsOf, swapMarks, toggleReaction } from '../review/marks';
 import { SAMPLE_A, SAMPLE_A_NAME, SAMPLE_B, SAMPLE_B_NAME } from '../samples/sample';
 import type { ChangeMarks, PanelMark, PanelReview } from './changes-panel';
 import { ChangesPanel } from './changes-panel';
+import type { ClaudeState } from './check-ui';
+import { CheckMenu, IssueCard } from './check-ui';
 import type { DialogState } from './dialogs';
 import { Dialog, GoogleDocDialog, HelpDialog, PasteDialog } from './dialogs';
 import { DropOverlay, useFileDrop } from './drop';
@@ -80,6 +90,45 @@ interface Prefs {
   sidebar: boolean;
   /** Review mode: notes, highlights and reactions, and the margins to add them from. */
   review: boolean;
+  /** Spelling and grammar checking, its language, and whether Claude may be asked. */
+  check: boolean;
+  lang: Lang;
+  claude: boolean;
+}
+
+const WORDS_KEY = 'collate.words.v1';
+
+/** British spelling where the browser's language says so. */
+function defaultLang(): Lang {
+  return /^en-(GB|AU|NZ|IE|ZA|IN)/i.test(globalThis.navigator?.language ?? '') ? 'en-GB' : 'en-US';
+}
+
+/** The reader's own dictionary, kept in this browser. */
+function loadWords(): string[] {
+  try {
+    const w = JSON.parse(localStorage.getItem(WORDS_KEY) ?? '[]') as unknown;
+    return Array.isArray(w) ? w.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function readIgnored(raw: unknown): { words: string[]; rules: string[] } {
+  const o = raw as { words?: unknown; rules?: unknown } | undefined;
+  const strings = (x: unknown) => (Array.isArray(x) ? x.filter((v): v is string => typeof v === 'string') : []);
+  return { words: strings(o?.words), rules: strings(o?.rules) };
+}
+
+function readClaude(raw: unknown): Record<string, Issue[]> {
+  if (!raw || typeof raw !== 'object') return {};
+  const out: Record<string, Issue[]> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!Array.isArray(v)) continue;
+    out[k] = v.filter(
+      (i): i is Issue => !!i && typeof i === 'object' && typeof (i as Issue).start === 'number' && typeof (i as Issue).end === 'number' && Array.isArray((i as Issue).suggestions),
+    );
+  }
+  return out;
 }
 
 function panelOverlays(): boolean {
@@ -101,7 +150,20 @@ function useMedia(query: string): boolean {
 }
 
 function loadPrefs(): Prefs {
-  const prefs: Prefs = { opts: { ...DEFAULT_OPTIONS }, changesOnly: false, view: 'split', minimap: false, lines: false, bands: true, lowContrast: false, sidebar: false, review: false };
+  const prefs: Prefs = {
+    opts: { ...DEFAULT_OPTIONS },
+    changesOnly: false,
+    view: 'split',
+    minimap: false,
+    lines: false,
+    bands: true,
+    lowContrast: false,
+    sidebar: false,
+    review: false,
+    check: false,
+    lang: defaultLang(),
+    claude: false,
+  };
   try {
     const raw = localStorage.getItem(PREFS_KEY);
     if (!raw) return prefs;
@@ -117,6 +179,9 @@ function loadPrefs(): Prefs {
       // An open list would cover a narrow screen's documents; it opens on request there.
       sidebar: !!p.sidebar && !panelOverlays(),
       review: !!p.review,
+      check: !!p.check,
+      lang: p.lang === 'en-GB' || p.lang === 'en-US' ? p.lang : defaultLang(),
+      claude: !!p.claude,
     };
   } catch {
     /* storage unavailable */
@@ -133,6 +198,11 @@ function sampleDocs(): Docs {
   };
 }
 
+/** The format backend that edits a document: in place for Word and OpenDocument files. */
+function backendFor(doc: Doc) {
+  return doc.pkg instanceof DocxPackage ? docxBackend : doc.pkg instanceof OdtPackage ? odtBackend : modelBackend;
+}
+
 function withDoc(docs: Docs, side: Side, doc: Doc | null, edits: number): Docs {
   return side === 'a' ? { ...docs, a: doc, edits: { ...docs.edits, a: edits } } : { ...docs, b: doc, edits: { ...docs.edits, b: edits } };
 }
@@ -143,7 +213,10 @@ type Pop =
   | { type: 'options' | 'copy'; anchor: HTMLElement }
   | { type: 'inline'; anchor: HTMLElement; rowKey: string; change: number }
   /** The marks on one side of a row, from its margin; `selection` is the selected text it was opened for. */
-  | { type: 'review'; anchor: HTMLElement; rowKey: string; side: Side; selection: TextTarget | null; writing: boolean };
+  | { type: 'review'; anchor: HTMLElement; rowKey: string; side: Side; selection: TextTarget | null; writing: boolean }
+  | { type: 'check'; anchor: HTMLElement }
+  /** A spelling or grammar finding, from a click on its words; `anchor` marks the words on the screen. */
+  | { type: 'issue'; anchor: HTMLElement; key: string; suggestions: string[] };
 
 export interface CompareAppProps {
   /** Documents to compare straight away. */
@@ -165,7 +238,7 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
   );
   const { a, b, edits } = history.now;
   const [prefs, setPrefs] = useState(loadPrefs);
-  const { opts, changesOnly, minimap, lines, bands, lowContrast, sidebar, review } = prefs;
+  const { opts, changesOnly, minimap, lines, bands, lowContrast, sidebar, review, check, lang } = prefs;
   // A phone has room for one column only.
   const phone = useMedia(PHONE);
   const view: View = phone ? 'unified' : prefs.view;
@@ -209,6 +282,31 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
   const noteRanges = useRef<Map<string, Range[]>>(new Map());
   const placed = useMemo(() => (cmp && review ? placeMarks(marks, cmp) : []), [cmp, marks, review]);
   const marginMap = useMemo(() => margins(placed), [placed]);
+
+  /* ---------------------------------------------------------- checking */
+
+  const [speller, setSpeller] = useState<Speller | null>(null);
+  /** The reader's own dictionary (kept in the browser), and what they ignored in this comparison. */
+  const [words, setWords] = useState<string[]>(loadWords);
+  const [ignored, setIgnored] = useState(() => readIgnored(restored?.extra.ignored));
+  /** Claude's findings, by the hash of the paragraph text they are about. */
+  const [claudeFound, setClaudeFound] = useState<Record<string, Issue[]>>(() => readClaude(restored?.extra.claude));
+  const [claudeAvailable, setClaudeAvailable] = useState<boolean | null>(null);
+  const [claudeRun, setClaudeRun] = useState<ClaudeState['run']>(null);
+  const claudeStop = useRef<AbortController | null>(null);
+  /** Where each finding's words are on the page, as last painted. */
+  const issueRanges = useRef<Map<string, Range[]>>(new Map());
+  const issueCursor = useRef(-1);
+  const ignores = useMemo<Ignores>(
+    () => ({ words: new Set([...words, ...ignored.words].map((w) => w.toLowerCase())), rules: new Set(ignored.rules) }),
+    [words, ignored],
+  );
+  const issues = useMemo<PlacedIssue[]>(
+    () => (check && cmp && speller?.lang === lang ? placeIssues(cmp, speller, ignores, claudeFound as ClaudeFindings) : []),
+    [check, cmp, speller, lang, ignores, claudeFound],
+  );
+  const issueCounts = check && speller?.lang === lang ? countIssues(issues) : null;
+  const claudeReady = prefs.claude && !!claudeAvailable;
 
   const root = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -323,7 +421,36 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
 
   const saveView = () => sessionWriter.view({ current: cur, scrollTop: scroller.current?.scrollTop ?? 0 });
   useEffect(() => sessionWriter.docs(history.now), [sessionWriter, history.now]);
-  useEffect(() => sessionWriter.extra({ review: marks }), [sessionWriter, marks]);
+  useEffect(() => sessionWriter.extra({ review: marks, ignored, claude: claudeFound }), [sessionWriter, marks, ignored, claudeFound]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(WORDS_KEY, JSON.stringify(words));
+    } catch {
+      /* storage unavailable */
+    }
+  }, [words]);
+  // The dictionary loads the first time checking is on (and again for the other language).
+  useEffect(() => {
+    if (!check) return;
+    let live = true;
+    loadSpeller(lang).then(
+      (sp) => live && setSpeller(sp),
+      (err) => {
+        console.error(err);
+        if (live) toast('The dictionary could not be loaded.', { error: true });
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [check, lang]);
+  useEffect(() => {
+    let live = true;
+    void claudeSampler().then((s) => live && setClaudeAvailable(!!s));
+    return () => {
+      live = false;
+    };
+  }, []);
   useEffect(saveView, [cur]);
   useEffect(() => {
     // A reload or a closed tab writes what is still waiting.
@@ -387,8 +514,7 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
     const now = history.latest();
     if (!cmp || !now.a || !now.b) return;
     const side: Side = dir === 'l2r' ? 'b' : 'a';
-    const target = now[side]!;
-    const backend = target.pkg instanceof DocxPackage ? docxBackend : target.pkg instanceof OdtPackage ? odtBackend : modelBackend;
+    const backend = backendFor(now[side]!);
     let res;
     try {
       res = applySelection(cmp, dir, sel, backend);
@@ -454,11 +580,15 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
     const now = history.latest();
     if (now.a || now.b) history.commit('New comparison', NO_DOCS);
     setMarks([]);
+    setIgnored({ words: [], rules: [] });
+    setClaudeFound({});
   };
 
   const loadSamples = () => {
     history.commit('Load samples', sampleDocs());
     setMarks([]);
+    setIgnored({ words: [], rules: [] });
+    setClaudeFound({});
     setCurrentState(0);
   };
 
@@ -702,14 +832,31 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
   useLayoutEffect(() => {
     const focus = pop?.type === 'review' && pop.selection && cmp ? placeMarks([{ id: 'focus', kind: 'note', target: pop.selection, text: '', created: 0 }], cmp) : [];
     noteRanges.current = paintMarks(review ? grid.current : null, placed, focus);
+    // Findings are underlined: red for spelling, blue for grammar.
+    const g = check ? grid.current : null;
+    const spell: Range[] = [];
+    const grammar: Range[] = [];
+    const found = new Map<string, Range[]>();
+    const cells = new Map();
+    if (g)
+      for (const pi of issues) {
+        const r = segmentRange(g, pi.side, pi.rowKey, pi.block, pi.issue.start, pi.issue.end, cells);
+        if (!r) continue;
+        (pi.issue.kind === 'spelling' ? spell : grammar).push(r);
+        found.set(pi.key, [r]);
+      }
+    paintRanges('collate-spell', spell);
+    paintRanges('collate-grammar', grammar);
+    issueRanges.current = found;
   });
 
   /** A click on noted text opens its card, as a comment in a word processor does. */
   const onNoteClick = (e: MouseEvent) => {
+    if (onIssueClick(e)) return;
     if (!review || !noteRanges.current.size) return;
     const sel = document.getSelection();
     if (sel && !sel.isCollapsed) return;
-    const id = noteAt(noteRanges.current, e.clientX, e.clientY);
+    const id = rangeAt(noteRanges.current, e.clientX, e.clientY);
     const p = id ? placed.find((x) => x.mark.id === id) : undefined;
     if (!p?.rowKey || !p.side) return;
     const button = grid.current?.querySelector<HTMLElement>(`.row[data-key="${CSS.escape(p.rowKey)}"] > .rail.${p.side} button`);
@@ -745,6 +892,112 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
       cancelAnimationFrame(frame);
     };
   }, [review]);
+
+  /* --------------------------------------------------- checking actions */
+
+  /** Replaces a finding's words in its document: an edit like any other, which can be undone. */
+  const fixIssue = (pi: PlacedIssue, replacement: string) => {
+    setPop(null);
+    const now = history.latest();
+    const doc = now[pi.side];
+    const next = doc && pi.block.type === 'p' ? replaceInParagraph(doc, pi.block, pi.issue.start, pi.issue.end, replacement, backendFor(doc)) : null;
+    if (!doc || !next) {
+      toast('That text can’t be changed here. Correct it in the file itself.', { error: true });
+      return;
+    }
+    history.commit(`Corrected “${pi.issue.text}”`, withDoc(now, pi.side, next, now.edits[pi.side] + 1));
+    toast(`Changed “${pi.issue.text}” to “${replacement}” in ${SIDE_NAME[pi.side]}`, { undo: true });
+  };
+
+  const ignoreIssue = (pi: PlacedIssue) => {
+    setPop(null);
+    const i = pi.issue;
+    if (i.kind === 'spelling') setIgnored((x) => ({ ...x, words: [...x.words, i.text.replace(/’/g, "'")] }));
+    else setIgnored((x) => ({ ...x, rules: [...x.rules, ignoreKey(i)] }));
+  };
+
+  const addWord = (pi: PlacedIssue) => {
+    setPop(null);
+    const w = pi.issue.text.replace(/’/g, "'");
+    setWords((ws) => (ws.includes(w) ? ws : [...ws, w]));
+    toast(`Added “${w}” to your dictionary`);
+  };
+
+  /** Asks Claude about one side's paragraphs (or just `only`), a batch at a time. */
+  const askClaude = async (side: Side, only?: readonly Block[]) => {
+    const sample = await claudeSampler();
+    if (!sample || !cmp || claudeRun) return;
+    const doc = side === 'a' ? cmp.left : cmp.right;
+    if (doc.mono) {
+      toast('Code and data files are not checked.');
+      return;
+    }
+    const blocks = only ?? cmp.rows.map((r) => (side === 'a' ? r.l : r.r)).filter((b): b is Block => !!b);
+    const seen = new Set<string>();
+    const paras = blocks
+      .map((b) => ({ key: hashText(blockStream(b)), text: blockStream(b) }))
+      .filter((p) => p.text.trim() && !seen.has(p.key) && seen.add(p.key) && (only || !(p.key in claudeFound)));
+    if (!paras.length) {
+      toast(`Claude has already checked ${SIDE_NAME[side]}.`);
+      return;
+    }
+    const ctl = new AbortController();
+    claudeStop.current = ctl;
+    setClaudeRun({ side, done: 0, total: batches(paras).length });
+    let found = 0;
+    try {
+      await claudeCheck(
+        sample,
+        paras,
+        lang,
+        (m, done, total) => {
+          for (const v of m.values()) found += v.length;
+          setClaudeFound((prev) => ({ ...prev, ...Object.fromEntries(m) }));
+          setClaudeRun({ side, done, total });
+        },
+        ctl.signal,
+      );
+      if (!ctl.signal.aborted) toast(found ? `Claude suggested ${plural(found, 'correction')} in ${SIDE_NAME[side]}` : `Claude found nothing to correct in ${SIDE_NAME[side]}`);
+    } catch (e) {
+      toast(claudeError(e), { error: (e as { code?: string }).code !== 'cancelled' });
+    } finally {
+      setClaudeRun(null);
+      claudeStop.current = null;
+    }
+  };
+
+  /** Scrolls to the next finding (after the last one visited). */
+  const nextIssue = () => {
+    if (!issues.length) return;
+    setPop(null);
+    issueCursor.current = (issueCursor.current + 1) % issues.length;
+    goToRow(issues[issueCursor.current]!.rowKey);
+  };
+
+  /** A small box over some words on the screen, for a card to open from. */
+  const floatingAnchor = (rect: DOMRect) => {
+    for (const old of Array.from(document.querySelectorAll('.float-anchor'))) old.remove();
+    const el = document.createElement('span');
+    el.className = 'float-anchor';
+    el.style.cssText = `position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;pointer-events:none`;
+    root.current?.appendChild(el);
+    return el;
+  };
+
+  /** A click on underlined words opens their finding. */
+  const onIssueClick = (e: MouseEvent): boolean => {
+    if (!check || !issueRanges.current.size) return false;
+    const sel = document.getSelection();
+    if (sel && !sel.isCollapsed) return false;
+    const key = rangeAt(issueRanges.current, e.clientX, e.clientY);
+    const pi = key ? issues.find((x) => x.key === key) : undefined;
+    const range = key ? issueRanges.current.get(key)?.[0] : undefined;
+    if (!pi || !range) return false;
+    e.stopPropagation();
+    const suggestions = pi.issue.kind === 'spelling' && speller ? speller.suggest(pi.issue.text) : pi.issue.suggestions;
+    openPop({ type: 'issue', anchor: floatingAnchor(range.getBoundingClientRect()), key: pi.key, suggestions });
+    return true;
+  };
 
   /* -------------------------------------------------------------- view */
 
@@ -887,6 +1140,9 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
       case 'r':
         if (cmp) setPref({ review: !review });
         break;
+      case 'g':
+        if (cmp) setPref({ check: !check });
+        break;
       case '?':
         openDialog({ type: 'help' });
         break;
@@ -1007,6 +1263,44 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
   else if (pop?.type === 'options') {
     menuClass = 'wide';
     menu = <OptionsMenu opts={opts} onChange={(o) => setPref({ opts: o })} />;
+  } else if (pop?.type === 'check') {
+    menuClass = 'wide';
+    menu = (
+      <CheckMenu
+        lang={lang}
+        counts={issueCounts}
+        claude={{ enabled: prefs.claude, available: claudeAvailable, run: claudeRun }}
+        words={words.length}
+        onLang={(l) => setPref({ lang: l })}
+        onClaude={(on) => setPref({ claude: on })}
+        onClaudeCheck={(side) => void askClaude(side)}
+        onStop={() => claudeStop.current?.abort()}
+        onNext={nextIssue}
+        onClearWords={() => setWords([])}
+      />
+    );
+  } else if (pop?.type === 'issue') {
+    const pi = issues.find((x) => x.key === pop.key);
+    const doc = pi && (pi.side === 'a' ? a : b);
+    menuClass = 'issue';
+    if (pi && doc)
+      menu = (
+        <IssueCard
+          issue={pi.issue}
+          side={pi.side}
+          suggestions={pop.suggestions}
+          editable={pi.block.type === 'p' && doc.blocks.includes(pi.block)}
+          canAsk={claudeReady}
+          asking={!!claudeRun}
+          onFix={(r) => fixIssue(pi, r)}
+          onIgnore={() => ignoreIssue(pi)}
+          onAddWord={() => addWord(pi)}
+          onAsk={() => {
+            setPop(null);
+            void askClaude(pi.side, [pi.block]);
+          }}
+        />
+      );
   } else if (pop?.type === 'review') {
     const ctx = reviewContext(pop);
     menuClass = 'review';
@@ -1060,9 +1354,12 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
         sidebar={sidebar}
         review={review}
         marks={marks.length}
+        check={check}
+        issues={issueCounts ? issueCounts.a + issueCounts.b : null}
+        checking={!!claudeRun}
         canUndo={history.canUndo}
         canRedo={history.canRedo}
-        menu={pop?.type === 'options' || pop?.type === 'copy' ? pop.type : null}
+        menu={pop?.type === 'options' || pop?.type === 'copy' || pop?.type === 'check' ? pop.type : null}
         same={same}
         onPrev={() => step(-1)}
         onNext={() => step(1)}
@@ -1079,6 +1376,8 @@ export function CompareApp({ docs, sample = false, home, session, restored }: Co
         onCopy={(e) => openPop({ type: 'copy', anchor: e.currentTarget })}
         onSidebar={() => toggleSidebar()}
         onReview={() => setPref({ review: !review })}
+        onCheck={() => setPref({ check: !check })}
+        onCheckMenu={(e) => openPop({ type: 'check', anchor: e.currentTarget })}
       />
       <Notices notices={notes.filter((x) => !dismissed.has(x.key))} onDismiss={(key) => setDismissed((d) => new Set(d).add(key))} />
       <main className="stage" id="stage">

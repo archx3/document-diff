@@ -246,6 +246,28 @@ function registry(): { reg: HighlightRegistry; Highlight: new (...ranges: Range[
   return { reg: css.highlights, Highlight };
 }
 
+/** The page range of [start, end) of a block's text, in the cells of one side of a row. */
+export function segmentRange(grid: Element, side: Side, rowKey: string, block: Block, start: number, end: number, cache?: Map<string, CellText>): Range | null {
+  const key = `${rowKey}|${side}`;
+  let ct = cache?.get(key);
+  if (!ct) {
+    const cells = cellsOf(grid, rowKey, side);
+    if (!cells.length) return null;
+    ct = new CellText(cells);
+    cache?.set(key, ct);
+  }
+  const at = mapInto(ct, block, start, end);
+  return at ? ct.range(at[0], at[1]) : null;
+}
+
+/** Paints ranges under a highlight name (with none, removes it). */
+export function paintRanges(name: string, ranges: readonly Range[]): void {
+  const api = registry();
+  if (!api) return;
+  if (ranges.length) api.reg.set(name, new api.Highlight(...ranges));
+  else api.reg.delete(name);
+}
+
 /** The page ranges of a placed text mark. */
 export function markRanges(grid: Element, p: Placed): Range[] {
   const out: Range[] = [];
@@ -291,8 +313,8 @@ export function paintMarks(grid: Element | null, placed: readonly Placed[], focu
   return notes;
 }
 
-/** The note (of those painted) whose text is at a point on the screen, if any. */
-export function noteAt(notes: ReadonlyMap<string, Range[]>, x: number, y: number): string | null {
+/** The key of the ranges (a note's, a finding's) at a point on the screen, if any. */
+export function rangeAt(ranges: ReadonlyMap<string, readonly Range[]>, x: number, y: number): string | null {
   const doc = document as Document & {
     caretPositionFromPoint?(x: number, y: number): { offsetNode: Node; offset: number } | null;
     caretRangeFromPoint?(x: number, y: number): Range | null;
@@ -311,8 +333,8 @@ export function noteAt(notes: ReadonlyMap<string, Range[]>, x: number, y: number
     }
   }
   if (!node) return null;
-  for (const [id, ranges] of notes) {
-    for (const r of ranges) {
+  for (const [id, list] of ranges) {
+    for (const r of list) {
       try {
         // Inside the range, not just touching its end.
         if (r.isPointInRange(node, offset) && !(node === r.endContainer && offset === r.endOffset)) return id;

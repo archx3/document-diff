@@ -66,6 +66,8 @@ const PATHS = {
   edit: '<path d="M10.5 2.75 13.25 5.5 6 12.75H3.25V10z"/><path d="M9 4.25 11.75 7"/>',
   /** Review mode: a page with a note in its margin. */
   review: '<rect x="1.75" y="2.25" width="8.5" height="11.5" rx="1.5"/><path d="M4 5.25h4M4 7.75h4M4 10.25h2.5"/><path d="M11.75 5.25h2.5v3.25h-1l-1.5 1.25z"/>',
+  /** Spelling and grammar: a letter and a tick. */
+  spell: '<path d="M2 11.5 4.75 3.5 7.5 11.5M3 8.75h3.5"/><path d="M8.75 11.25 11 13.5l3.25-4.75"/>',
   sun: '<circle cx="8" cy="8" r="2.75"/><path d="M8 1.5v1.25M8 13.25v1.25M1.5 8h1.25M13.25 8h1.25M3.4 3.4l.9.9M11.7 11.7l.9.9M3.4 12.6l.9-.9M11.7 4.3l.9-.9"/>',
   moon: '<path d="M13.5 9.6A5.75 5.75 0 1 1 6.4 2.5a4.6 4.6 0 0 0 7.1 7.1z"/>',
 };
