@@ -228,11 +228,14 @@ function sameLine(x: Line, y: Line): boolean {
 /** The arrow on one side of a change: A's pulls B's version in, B's pulls A's. */
 function HunkArrow({ side, kind, hunk, onCopyHunk }: { side: 'a' | 'b'; kind: ActKind; hunk: number; onCopyHunk: ElasticGridProps['onCopyHunk'] }) {
   const [toA, toB] = actLabels({ kind });
-  const dir: Dir = side === 'a' ? 'r2l' : 'l2r';
-  const text = side === 'a' ? toA : toB;
+  const dir: Dir = side !== 'a' ? 'r2l':  'l2r';
+  const text = side !== 'a' ? toA : toB;
+
+  const flippedSide = side === 'a' ? 'b' : 'a'
+
   return (
-    <button type="button" className={`act to-${side}`} data-act={dir} data-tip={text} aria-label={text} onClick={() => onCopyHunk(hunk, dir)}>
-      <Ico name={side === 'a' ? 'chevronsLeft' : 'chevronsRight'} />
+    <button type="button" className={`act to-${flippedSide}`} data-act={dir} data-tip={text} aria-label={text} onClick={() => onCopyHunk(hunk, dir)}>
+      <Ico name={flippedSide === 'a' ? 'chevronsLeft' : 'chevronsRight'} />
     </button>
   );
 }

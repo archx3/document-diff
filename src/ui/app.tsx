@@ -31,7 +31,7 @@ import type { DocMenu } from './heads';
 import { ColumnHeads } from './heads';
 import type { Docs } from './history';
 import { NO_DOCS, useDocHistory } from './history';
-import { useStable } from './hooks';
+import { useInstance, useStable } from './hooks';
 import { GridLayout, captureAnchor, restoreAnchor, scrollToHunk } from './layout';
 import { CopyMenu, ExportMenu, InlineMenu, LoadMenu, OptionsMenu, Popover } from './menus';
 import type { Notice } from './notices';
@@ -187,8 +187,8 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
   const userScrolled = useRef(false);
   /** Runs once the page shows the next update. */
   const afterRender = useRef<(() => void) | null>(null);
-  const [layout] = useState(() => new GridLayout(() => scroller.current, () => grid.current));
-  const [elasticLayout] = useState(() => new ElasticLayout());
+  const layout = useInstance(GridLayout, () => new GridLayout(() => scroller.current, () => grid.current));
+  const elasticLayout = useInstance(ElasticLayout, () => new ElasticLayout());
   /** Measures whichever grid is showing. */
   const lay = elastic ? elasticLayout : layout;
   /** The grid on the page is the one with connection bands (in a commit, it may not be the one being rendered). */

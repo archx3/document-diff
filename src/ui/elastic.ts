@@ -105,21 +105,18 @@ export function columnOffsets(L: Lines, s: number, h: number, sMax: number): Off
 }
 
 /**
- * The shape of a band from A's range [a0, a1] to B's [b0, b1]: level across
+ * The outline of a band from A's range [a0, a1] to B's [b0, b1]: level across
  * A's side of the gutter (0 to xa), an S-curve to B's side (xb to x1), then
  * level again. A range of no height (the place where the other side's text
- * would go) makes a point of the band. `edges` are its top and bottom;
- * `outline` goes all the way round, its ends just inside the gutter so a line
- * along them shows in full beside the sheets.
+ * would go) makes a point of the band. `edges` are its top and bottom.
  */
-export function bandPath(xa: number, xb: number, x1: number, a0: number, a1: number, b0: number, b1: number): { fill: string; edges: string; outline: string } {
+export function bandPath(xa: number, xb: number, x1: number, a0: number, a1: number, b0: number, b1: number): { fill: string; edges: string } {
   const m = (xa + xb) / 2;
   const f = (x: number) => Math.round(x * 10) / 10;
-  const shape = (l: number, r: number) =>
-    `M${f(l)} ${f(a0)}H${f(xa)}C${f(m)} ${f(a0)} ${f(m)} ${f(b0)} ${f(xb)} ${f(b0)}H${f(r)}V${f(b1)}H${f(xb)}C${f(m)} ${f(b1)} ${f(m)} ${f(a1)} ${f(xa)} ${f(a1)}H${f(l)}Z`;
   const top = `M0 ${f(a0)}H${f(xa)}C${f(m)} ${f(a0)} ${f(m)} ${f(b0)} ${f(xb)} ${f(b0)}H${f(x1)}`;
   const bottom = `M0 ${f(a1)}H${f(xa)}C${f(m)} ${f(a1)} ${f(m)} ${f(b1)} ${f(xb)} ${f(b1)}H${f(x1)}`;
-  return { fill: shape(0, x1), edges: a0 === a1 && b0 === b1 ? top : `${top}${bottom}`, outline: shape(0.75, x1 - 0.75) };
+  const fill = `${top}V${f(b1)}H${f(xb)}C${f(m)} ${f(b1)} ${f(m)} ${f(a1)} ${f(xa)} ${f(a1)}H0Z`;
+  return { fill, edges: a0 === a1 && b0 === b1 ? top : `${top}${bottom}` };
 }
 
 export interface ElasticParts {
@@ -303,7 +300,7 @@ export class ElasticLayout implements Measures {
       if (Math.max(a1, b1) < 0 || Math.min(a0, b0) > to - from) continue;
       const path = bandPath(xa, xb, this.gut, a0, a1, b0, b1);
       const cls = `k-${r.kind}${r.hunk === this.current ? ' cur' : ''}`;
-      out += `<path class="band ${cls}" data-hunk="${r.hunk}" d="${path.fill}"/><path class="band-edge ${cls}" d="${path.edges}"/><path class="band-line ${cls}" d="${path.outline}"/>`;
+      out += `<path class="band ${cls}" data-hunk="${r.hunk}" d="${path.fill}"/><path class="band-edge ${cls}" d="${path.edges}"/>`;
     }
     svg.innerHTML = out;
   }
