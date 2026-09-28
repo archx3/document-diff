@@ -1427,35 +1427,9 @@ a.brand-word {
   stroke-width: 1.5;
 }
 
-/* Low contrast: the sheets have no borders to close the bands' ends, so each band has a line all
-   the way round rather than along its top and bottom. */
-.band-line {
-  display: none;
-  fill: none;
-  stroke: var(--chg);
-  stroke-width: 1;
-  stroke-opacity: 0.7;
-}
-
-.band-line.k-del {
-  stroke: var(--a);
-}
-
-.band-line.k-ins {
-  stroke: var(--b);
-}
-
-.band-line.cur {
-  stroke-opacity: 1;
-  stroke-width: 1.5;
-}
-
+/* Low contrast has no lines: the bands are their colour alone (the current one stronger). */
 .app.lowc .band-edge {
   display: none;
-}
-
-.app.lowc .band-line {
-  display: inline;
 }
 
 /* ------------------------------------------------------------ unified */
