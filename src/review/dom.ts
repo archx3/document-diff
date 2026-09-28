@@ -207,10 +207,43 @@ interface HighlightRegistry {
   delete(name: string): void;
 }
 
+/**
+ * How each kind of mark is painted. Added to the page from here because the
+ * build's CSS tools don't know the ::highlight() pseudo-element yet.
+ */
+const HIGHLIGHT_CSS = `
+::highlight(collate-hl-yellow) { background-color: var(--hl-yellow); }
+::highlight(collate-hl-green) { background-color: var(--hl-green); }
+::highlight(collate-hl-blue) { background-color: var(--hl-blue); }
+::highlight(collate-hl-pink) { background-color: var(--hl-pink); }
+::highlight(collate-note) {
+  background-color: var(--note-mark);
+  text-decoration: underline dotted var(--accent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+::highlight(collate-focus) { background-color: var(--focus-mark); }
+::highlight(collate-spell) { text-decoration: underline wavy var(--spell); text-decoration-thickness: 1.25px; text-underline-offset: 3px; }
+::highlight(collate-grammar) { text-decoration: underline wavy var(--grammar); text-decoration-thickness: 1.25px; text-underline-offset: 3px; }
+`;
+
+let styled = false;
+
+function addHighlightStyles(): void {
+  if (styled || typeof document === 'undefined') return;
+  styled = true;
+  const style = document.createElement('style');
+  style.dataset.collate = 'highlights';
+  style.textContent = HIGHLIGHT_CSS;
+  document.head.appendChild(style);
+}
+
 function registry(): { reg: HighlightRegistry; Highlight: new (...ranges: Range[]) => unknown } | null {
   const css = globalThis.CSS as unknown as { highlights?: HighlightRegistry } | undefined;
   const Highlight = (globalThis as unknown as { Highlight?: new (...ranges: Range[]) => unknown }).Highlight;
-  return css?.highlights && Highlight ? { reg: css.highlights, Highlight } : null;
+  if (!css?.highlights || !Highlight) return null;
+  addHighlightStyles();
+  return { reg: css.highlights, Highlight };
 }
 
 /** The page ranges of a placed text mark. */

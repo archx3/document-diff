@@ -1835,33 +1835,6 @@ a.brand-word {
   background: var(--hl-pink);
 }
 
-::highlight(collate-hl-yellow) {
-  background-color: var(--hl-yellow);
-}
-
-::highlight(collate-hl-green) {
-  background-color: var(--hl-green);
-}
-
-::highlight(collate-hl-blue) {
-  background-color: var(--hl-blue);
-}
-
-::highlight(collate-hl-pink) {
-  background-color: var(--hl-pink);
-}
-
-::highlight(collate-note) {
-  background-color: var(--note-mark);
-  text-decoration: underline dotted var(--accent);
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 3px;
-}
-
-::highlight(collate-focus) {
-  background-color: var(--focus-mark);
-}
-
 /* Marks kept while review mode is off: a dot on its button. */
 #btn-review {
   position: relative;

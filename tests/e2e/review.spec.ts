@@ -82,7 +82,8 @@ test.describe('marks', () => {
 
   test('reactions and notes on a change show in both margins and in the list of changes', async ({ page }) => {
     const row = page.locator('.row', { hasText: 'This agreement is made on' }).first();
-    await row.hover();
+    // (The ruler sits in the middle of the row.)
+    await row.locator('.cell.a').hover();
     await row.locator('.rail.a [data-rail="add"]').click();
     const card = page.locator('#review-card');
     await expect(card).toContainText('Change 1');
@@ -133,27 +134,31 @@ test.describe('marks', () => {
   });
 
   test('marks are kept across a reload, move with a swap, and are listed once their text is gone', async ({ page }) => {
-    await select(cell(page, 'b', 'The Contractor will design'), 'marketing website');
+    // "newsletter" is only in B.
+    await select(cell(page, 'b', 'The Contractor will design'), 'newsletter');
     await margin(page, 'b', 'The Contractor will design').locator('[data-rail="highlight"]').click();
-    await expect.poll(() => painted(page, 'collate-hl-yellow')).toEqual(['marketing website']);
+    await expect.poll(() => painted(page, 'collate-hl-yellow')).toEqual(['newsletter']);
 
     await page.waitForTimeout(700);
     await page.reload();
     await expect(page.locator('#btn-review')).toHaveAttribute('aria-pressed', 'true');
-    await expect.poll(() => painted(page, 'collate-hl-yellow')).toEqual(['marketing website']);
+    await expect.poll(() => painted(page, 'collate-hl-yellow')).toEqual(['newsletter']);
     await expect(margin(page, 'b', 'The Contractor will design').locator('.rh.yellow')).toBeVisible();
 
     await page.locator('#btn-swap').click();
     await expect(margin(page, 'a', 'The Contractor will design').locator('.rh.yellow')).toBeVisible();
-    await expect.poll(() => painted(page, 'collate-hl-yellow')).toEqual(['marketing website']);
+    await expect.poll(() => painted(page, 'collate-hl-yellow')).toEqual(['newsletter']);
     await page.locator('#btn-swap').click();
 
-    // Copying A's version over B's paragraph takes the highlighted words away.
+    // Copying A's version over B's paragraph takes the highlighted word away.
     const row = page.locator('.row', { hasText: 'The Contractor will design' }).first();
     await row.locator('button[data-act="l2r"]').click();
-    await expect.poll(() => painted(page, 'collate-hl-yellow')).toEqual(['marketing website']);
+    await expect.poll(() => painted(page, 'collate-hl-yellow')).toEqual([]);
     await page.keyboard.press('s');
     await page.getByRole('tab', { name: /Notes/ }).click();
-    await expect(page.locator('.mark-card')).toHaveCount(1);
+    await expect(page.locator('.notes-lost-head')).toHaveText('No longer in the documents');
+    await expect(page.locator('.mark-card.lost')).toContainText('newsletter');
+    await page.locator('.mark-card.lost').getByRole('button', { name: 'Delete' }).click();
+    await expect(page.locator('.mark-card')).toHaveCount(0);
   });
 });
