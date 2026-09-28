@@ -32,6 +32,7 @@ Compare two versions of a document side by side, see every difference down to th
   - everything (*Copy changes › Make B match A*).
 
   Every copy can be undone and redone.
+- **Pick up where you left off.** Reloading the page keeps both documents, every change copied between them and your place in them. The comparison is kept in this browser only (IndexedDB), one per tab; opening the comparison page afresh carries on with the most recent one. An unedited document is kept as its file, an edited Word or OpenDocument file with the copied changes written in, and anything else as the document itself. The undo history starts again after a reload.
 - **Get the result out** (*Export* on either side). A document is offered in its own format first:
   - **Word** and **OpenDocument**: when the side was loaded from a `.docx` or `.odt`, the original file is kept and only the copied paragraphs change. Styles, headers, footers, page setup, comments, bookmarks and content controls all stay. Copied content brings its images, links, styles, list numbering and footnotes with it, even between Word and OpenDocument files.
   - **CSV/TSV** and code or data files are saved in their own format, with their separator and line endings.
@@ -107,7 +108,7 @@ The site has four pages:
 
 - `/` is the landing page. Dropping a file on it, or choosing one, starts a comparison.
 - `/compare/new/` asks for the other version, which must be the same kind of file as the first (Word with Word, PDF with PDF and so on), then opens the two in the workspace. Opened on its own, it asks for both files in turn.
-- `/compare/` is the comparison workspace for the two documents chosen there; any two documents, in any mix of formats, can then be loaded in it. The documents are only kept in memory, so opened directly (or reloaded) it goes to `/compare/new/`.
+- `/compare/` is the comparison workspace for the two documents chosen there; any two documents, in any mix of formats, can then be loaded in it. The comparison is kept in the browser, so a reload carries on with it; opened directly, it carries on with the most recent comparison, or goes to `/compare/new/` when there is none.
 - `/compare/sample/` is the workspace with the sample drafts.
 
 `dist-single/collate.html` is the workspace on its own, starting with the sample drafts, built by Vite from `index.html` and `src/main.tsx`. It works when opened straight from disk, so you can share it as a single file (about 600 KB, React included). It loads [pdf.js](https://mozilla.github.io/pdf.js/) from jsDelivr the first time a PDF is opened, pinned to the installed version by an import map with integrity hashes; the regular build serves its own copy of pdf.js and loads it only when a PDF is opened. Both builds load pdfmake from jsDelivr (with a subresource integrity check) when a PDF is first saved.

@@ -15,6 +15,7 @@ import { readHtml } from '../formats/html/read';
 import { ACCEPTED_EXTENSIONS, LoadError, loadFile, loadPaste } from '../formats/load';
 import { odtBackend } from '../formats/odt/backend';
 import { OdtPackage } from '../formats/odt/package';
+import { noteSource } from '../lib/sources';
 import { SAMPLE_A, SAMPLE_A_NAME, SAMPLE_B, SAMPLE_B_NAME } from '../samples/sample';
 import { ChangesPanel } from './changes-panel';
 import type { DialogState } from './dialogs';
@@ -38,6 +39,8 @@ import type { Notice } from './notices';
 import { Notices } from './notices';
 import { Overview } from './overview';
 import { gridItems } from './rows';
+import type { Restored, SessionScope } from './session';
+import { SessionWriter } from './session';
 import { currentTheme, onSystemThemeChange, toggleTheme } from './theme';
 import { Toasts, useToasts } from './toasts';
 import type { NavOff } from './toolbar';
@@ -135,11 +138,17 @@ export interface CompareAppProps {
   sample?: boolean;
   /** Where the name in the app bar links to. */
   home?: string;
+  /** Keeps the comparison in this browser under this name, so a reload brings it back. */
+  session?: SessionScope;
+  /** A comparison kept from before the page was reloaded, to carry on with. */
+  restored?: Restored | null;
 }
 
 /** The comparison workspace. */
-export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
-  const history = useDocHistory(() => (docs ? { a: docs.a, b: docs.b, edits: { a: 0, b: 0 }, sample: false } : sample ? sampleDocs() : NO_DOCS));
+export function CompareApp({ docs, sample = false, home, session, restored }: CompareAppProps) {
+  const history = useDocHistory(() =>
+    restored ? restored.docs : docs ? { a: docs.a, b: docs.b, edits: { a: 0, b: 0 }, sample: false } : sample ? sampleDocs() : NO_DOCS,
+  );
   const { a, b, edits } = history.now;
   const [prefs, setPrefs] = useState(loadPrefs);
   const { opts, changesOnly, minimap, lines, bands, lowContrast, sidebar } = prefs;
@@ -157,7 +166,7 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
     }
   }, [prefs]);
 
-  const [current, setCurrentState] = useState(0);
+  const [current, setCurrentState] = useState(() => restored?.view?.current ?? 0);
   /** Folds the reader opened, by the key of their first row. */
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   /** Notices the reader closed, which stay closed while the page is open. */
@@ -188,6 +197,7 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
   /** Runs once the page shows the next update. */
   const afterRender = useRef<(() => void) | null>(null);
   const layout = useInstance(GridLayout, () => new GridLayout(() => scroller.current, () => grid.current));
+  const sessionWriter = useInstance(SessionWriter, () => new SessionWriter(session));
   const elasticLayout = useInstance(ElasticLayout, () => new ElasticLayout());
   /** Measures whichever grid is showing. */
   const lay = elastic ? elasticLayout : layout;
@@ -283,6 +293,31 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
     latestUpdateNav.current = updateNav;
     updateNav();
   });
+
+  /* ----------------------------------------------------------- session */
+
+  const saveView = () => sessionWriter.view({ current: cur, scrollTop: scroller.current?.scrollTop ?? 0 });
+  useEffect(() => sessionWriter.docs(history.now), [sessionWriter, history.now]);
+  useEffect(saveView, [cur]);
+  useEffect(() => {
+    // A reload or a closed tab writes what is still waiting.
+    const flush = () => void sessionWriter.flush();
+    const hidden = () => document.visibilityState === 'hidden' && flush();
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', hidden);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', hidden);
+    };
+  }, [sessionWriter]);
+  // Back where the reader was before the reload.
+  useEffect(() => {
+    if (!restored) return;
+    const top = restored.view?.scrollTop ?? 0;
+    if (top > 0) requestAnimationFrame(() => scroller.current?.scrollTo({ top }));
+    if (restored.lost.length) toast(`${restored.lost.join(' and ')} could not be opened again. Load ${restored.lost.length > 1 ? 'them' : 'it'} again to carry on.`, { error: true });
+    // Once, for the comparison the page opened with.
+  }, []);
 
   // Widening the gutter or the list of changes, or changing the view, moves every row.
   useLayoutEffect(() => layout.invalidate(), [layout, minimap, lines, sidebar, view]);
@@ -422,6 +457,7 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
         await new Promise((r) => setTimeout(r, 20));
         const doc = await loadFile(f);
         if (!doc.blocks.some((x) => x.type !== 'marker' && !isBlank(x))) throw new LoadError(`"${f.name}" has no text to compare.`);
+        noteSource(doc, f);
         install(s, doc, `Loaded “${f.name}” as ${SIDE_NAME[s]}`);
       } catch (err) {
         if (err instanceof LoadError && err.googleDocId !== undefined) {
@@ -801,6 +837,7 @@ export function CompareApp({ docs, sample = false, home }: CompareAppProps) {
               onScroll={() => {
                 if (pop) setPop(null);
                 scheduleNav();
+                saveView();
               }}
               onWheel={manual}
               onTouchMove={manual}
