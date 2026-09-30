@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { alignFrames, findDifferences, timeMap } from '../../src/audio/align';
 import { featureRate, features, fft, loudness, peaks, spectrogram } from '../../src/audio/analyze';
+import { tooLongForServer } from '../../src/audio/transcribe-server';
 import { diffWords, heardWords, pairedSentences } from '../../src/audio/words';
 
 const RATE = 16000;
@@ -205,5 +206,20 @@ describe('transcripts compared with or without their punctuation', () => {
     expect(changed('this quarter. Thank you', 'this quarter, thank you', { punctuation: false, case: true })).toBe(1);
     expect(changed('this quarter. Thank you', 'this quarter. thank you', { punctuation: true, case: false })).toBe(1);
     expect(changed('grew by 9%', 'grew by 9')).toBe(1);
+  });
+});
+
+describe('recordings too long for the transcription server', () => {
+  it('names the recording that is too long, and the longest the server takes', () => {
+    expect(tooLongForServer(1800, { a: 1800, b: 1980 })).toBe(
+      'B is 33 minutes long, and the transcription server takes recordings of up to 30 minutes. Transcribe on this device instead, or compare shorter recordings.',
+    );
+    expect(tooLongForServer(1800, { a: 3600, b: 3890.5 })).toMatch(/^A and B are 60 minutes and 64:50 long, /);
+  });
+
+  it('lets through what fits, what is not sent again, and anything when the server gives no limit', () => {
+    expect(tooLongForServer(1800, { a: 1800, b: 1800.05 })).toBeNull();
+    expect(tooLongForServer(1800, { a: 0, b: 600 })).toBeNull();
+    expect(tooLongForServer(undefined, { a: 7200, b: 7200 })).toBeNull();
   });
 });

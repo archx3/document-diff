@@ -264,3 +264,18 @@ test('a transcription on the server can be stopped too', async ({ page, request 
   await page.locator('#toolbar #btn-transcribe').click();
   await expect(page.locator('.at-said-cmp .cell.b')).toContainText(['engineers'], { timeout: 60_000 });
 });
+
+test('recordings longer than the server takes are not sent, and the reader is told why', async ({ page }) => {
+  // The service says it takes recordings of up to 4 seconds (A is 5 s long, B 7 s).
+  await page.route('**/api/transcribe/', (route) => (route.request().method() === 'GET' ? route.fulfill({ json: { available: true, model: 'test', maxSeconds: 4 } }) : route.continue()));
+  const sent: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() === 'POST' && r.url().includes('/api/transcribe')) sent.push(r.url());
+  });
+  await openRecordings(page);
+  await page.locator('#btn-transcribe-where').click();
+  await page.locator('.where-menu [data-where="server"]').click();
+  await page.locator('dialog.consent [data-consent="yes"]').click();
+  await expect(page.locator('.said-error')).toHaveText('A and B are 0:05 and 0:07 long, and the transcription server takes recordings of up to 0:04. Transcribe on this device instead, or compare shorter recordings.');
+  expect(sent).toHaveLength(0);
+});

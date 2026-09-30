@@ -13,7 +13,7 @@ import type { DecodedAudio } from '../../audio/decode';
 import { ANALYSIS_RATE, decodeAudio } from '../../audio/decode';
 import type { TranscribeProgress, Transcript, Word } from '../../audio/transcribe';
 import { canTranscribe, transcribe } from '../../audio/transcribe';
-import { consentGiven, rememberConsent, serverTranscribes, transcribeOnServer, transcribeServer } from '../../audio/transcribe-server';
+import { consentGiven, rememberConsent, serverLimit, serverTranscribes, tooLongForServer, transcribeOnServer, transcribeServer } from '../../audio/transcribe-server';
 import type { WordsIgnore } from '../../audio/words';
 import { heardWords } from '../../audio/words';
 import type { Doc, InlineObject } from '../../core/model';
@@ -481,6 +481,10 @@ export function useAudioCompare(docs: { a: Doc; b: Doc } | null, keeper?: Transc
         try {
           const ready: Side | undefined = ta ? 'a' : tb ? 'b' : undefined;
           if (w === 'server') {
+            // A recording longer than the service takes would be refused there, after the upload (and with
+            // the other one transcribed for nothing): neither is sent.
+            const tooLong = tooLongForServer(await serverLimit(), { a: ta ? 0 : sides.a.decoded.duration, b: tb ? 0 : sides.b.decoded.duration });
+            if (tooLong) throw new Error(tooLong);
             // The service transcribes two at once.
             setTranscript({ status: 'working', side: ta ? 'b' : 'a', progress: { stage: 'server' }, ready });
             [ta, tb] = await Promise.all([

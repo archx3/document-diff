@@ -103,10 +103,19 @@ export const ElasticGrid = memo(function ElasticGrid({ cmp, items, current, layo
     layout.attach({ scroller, grid: el.current!, a: colA.current!, b: colB.current!, bands: bands.current! });
     return () => layout.detach();
   }, [layout]);
-  // After every render: read the lines again, keep the reader's place and line the columns up.
+  // After every render: read the lines again, keep the reader's place and line the columns up. When
+  // only the current change moved, the lines are as they were (their sizes are watched anyway): its
+  // band is drawn again without measuring every line, which in a long document means laying out
+  // the whole of it.
+  const measured = useRef<{ lines: readonly Line[]; review: ReviewView | null } | null>(null);
   useLayoutEffect(() => {
     layout.current = current;
-    layout.rendered();
+    const m = measured.current;
+    if (m?.lines === lines && m.review === review) layout.sync();
+    else {
+      measured.current = { lines, review };
+      layout.rendered();
+    }
   });
 
   const onClick = (e: MouseEvent) => {

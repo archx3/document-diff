@@ -27,16 +27,56 @@ function standalone(): boolean {
   }
 }
 
-let offered: Promise<boolean> | null = null;
+/** What the server says about its transcription: whether it has it, and the longest recording it takes (seconds). */
+interface Offer {
+  available: boolean;
+  maxSeconds?: number;
+}
+
+let offered: Promise<Offer> | null = null;
+
+function offer(): Promise<Offer> {
+  if (standalone() || typeof fetch === 'undefined' || typeof location === 'undefined' || location.protocol === 'file:') return Promise.resolve({ available: false });
+  offered ??= fetch(endpoint(), { cache: 'no-store' })
+    .then((r) => (r.ok ? (r.json() as Promise<Partial<Offer>>) : ({} as Partial<Offer>)))
+    .then((b) => ({ available: !!b.available, maxSeconds: typeof b.maxSeconds === 'number' && b.maxSeconds > 0 ? b.maxSeconds : undefined }))
+    .catch(() => ({ available: false }));
+  return offered;
+}
 
 /** Whether the server this page came from transcribes (asked once). */
 export function serverTranscribes(): Promise<boolean> {
-  if (standalone() || typeof fetch === 'undefined' || typeof location === 'undefined' || location.protocol === 'file:') return Promise.resolve(false);
-  offered ??= fetch(endpoint(), { cache: 'no-store' })
-    .then((r) => (r.ok ? (r.json() as Promise<{ available?: boolean }>) : { available: false }))
-    .then((b) => !!b.available)
-    .catch(() => false);
-  return offered;
+  return offer().then((o) => o.available);
+}
+
+/**
+ * The longest recording the server takes, in seconds, when it says: a longer
+ * one is refused there, so it isn't sent (nor, for a pair, the other one).
+ */
+export function serverLimit(): Promise<number | undefined> {
+  return offer().then((o) => o.maxSeconds);
+}
+
+/** A length of time in a sentence: "30 minutes", or 31:30 when it isn't a whole number of minutes. */
+function span(seconds: number): string {
+  const m = Math.round(seconds / 60);
+  if (Math.abs(seconds - m * 60) < 1) return `${m} ${m === 1 ? 'minute' : 'minutes'}`;
+  const s = Math.floor(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
+ * Why a pair can't go to the transcription server: a recording longer than it
+ * takes (`limit` seconds), which it would refuse once sent. Null when both fit;
+ * a recording already transcribed (not sent again) has no length here.
+ */
+export function tooLongForServer(limit: number | undefined, seconds: { a?: number; b?: number }): string | null {
+  if (!limit) return null;
+  // The service's limit is on the WAV's size, with a little room for its header.
+  const over = (['a', 'b'] as const).filter((side) => (seconds[side] ?? 0) > limit + 0.1);
+  if (!over.length) return null;
+  const which = over.length === 2 ? `A and B are ${span(seconds.a!)} and ${span(seconds.b!)} long` : `${over[0]!.toUpperCase()} is ${span(seconds[over[0]!]!)} long`;
+  return `${which}, and the transcription server takes recordings of up to ${span(limit)}. Transcribe on this device instead, or compare shorter recordings.`;
 }
 
 /** Where recordings go, for the reader: this site. */
