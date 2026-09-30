@@ -11,6 +11,7 @@ import { OpenSample } from '../../components/open-sample';
 import { Waveform, fakePeaks } from '../../components/replica/wave';
 import { SitePage, asset } from '../../components/site-header';
 import site from '../../components/site.module.css';
+import { largeSamplesOn } from '../../lib/large-samples';
 
 export const metadata: Metadata = {
   title: 'Samples',
@@ -402,6 +403,12 @@ export default function SamplesPage() {
           <a href="#audio" className={`${site.pill} ${site.secondary} ${site.small}`}>
             <Icon name="audio" /> Audio
           </a>
+          {/* Made on this machine for testing by hand: offered in development only (or with LARGE_SAMPLES=1). */}
+          {largeSamplesOn() && (
+            <Link href="/samples/large/" className={`${site.pill} ${site.secondary} ${site.small}`}>
+              <Icon name="bolt" /> Large samples
+            </Link>
+          )}
         </div>
       </section>
 

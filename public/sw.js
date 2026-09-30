@@ -58,6 +58,9 @@ self.addEventListener('fetch', (e) => {
   else if (url.origin === scope.origin && url.pathname.startsWith(`${scope.pathname}_next/static/`)) e.respondWith(cacheFirst(req));
   // The speech model and its runtime: large, and never changed in place.
   else if (url.origin === scope.origin && (url.pathname.startsWith(`${scope.pathname}models/`) || url.pathname.startsWith(`${scope.pathname}ort/`))) e.respondWith(cacheFirst(req));
+  // The site's API answers afresh each time, and none of it is kept: whether transcription is there
+  // (it isn't, offline), and on a test machine the large samples, hundreds of megabytes each.
+  else if (url.origin === scope.origin && url.pathname.startsWith(`${scope.pathname}api/`)) return;
   else if (url.origin === scope.origin && url.href.startsWith(scope.href)) e.respondWith(networkFirst(req));
   else if (CDNS.includes(url.origin)) e.respondWith(cacheFirst(req));
   // Anything else (a cloud drive's files and sign-in) goes straight to the network.

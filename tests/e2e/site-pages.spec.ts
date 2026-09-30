@@ -75,3 +75,13 @@ test('every legal page is linked from the footer', async ({ page }) => {
     await page.goBack();
   }
 });
+
+test('a built site has no large samples, unless it is started with them', async ({ page, request }) => {
+  // They are made on a test machine (npm run samples:large) and offered only by a development server,
+  // or one started with LARGE_SAMPLES=1.
+  test.skip(!!process.env.LARGE_SAMPLES, 'this server offers the large samples');
+  expect((await request.get('/samples/large/')).status()).toBe(404);
+  expect((await request.get('/api/large-samples/doc-10000-a.docx')).status()).toBe(404);
+  await page.goto('/samples/');
+  await expect(page.getByRole('link', { name: 'Large samples' })).toHaveCount(0);
+});

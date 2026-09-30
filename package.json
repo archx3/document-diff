@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "fixtures": "python3 scripts/make_fixtures.py",
+    "samples:large": "python3 scripts/stress/make-docs.py 10000 25000 50000 && node scripts/stress/make-audio.mjs 10 60 && node scripts/stress/make-audio.mjs --large 30 && node scripts/stress/make-speech.mjs 10 30 60",
     "postinstall": "node scripts/build-dictionaries.mjs",
     "models": "node scripts/fetch-models.mjs",
     "server:model": "node scripts/fetch-server-model.mjs",
