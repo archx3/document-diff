@@ -339,7 +339,7 @@ kbd {
 }
 
 .app.with-lines {
-  --num-w: 34px;
+  --num-w: 20px;
 }
 
 .app.with-map {
@@ -1500,7 +1500,7 @@ a.brand-word {
    part of the gutter (line numbers and the change's arrow); the bands curve in the middle, under
    the overview. */
 .app.elastic {
-  --band-w: 22px;
+  --band-w: 12px;
 }
 
 .app.elastic .scroller {
@@ -1958,7 +1958,7 @@ a.brand-word {
    coloured with the CSS Custom Highlight API (review/dom.ts), so the documents' HTML stays as it
    is. The margins sit inside the rows (whose painting is contained), level with each row. */
 .app.review {
-  --mg: 60px;
+  --mg: 40px;
 }
 
 .rail {

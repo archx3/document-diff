@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { MouseEvent, ReactNode, RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { IconName } from '../components/icons';
 import { Ico } from '../components/icons';
 import type { Comparison } from '../core/compare';
@@ -35,7 +35,23 @@ interface ToolProps {
 }
 
 /** An icon button, borderless until hovered: its label is its accessible name and tooltip. */
-export function Tool({ id, icon, label, tip, kbd, keys, toggle, pressed, menu, expanded, controls, className, disabled, onClick, children }: Readonly<ToolProps>) {
+export function Tool ({
+                        id,
+                        icon,
+                        label,
+                        tip,
+                        kbd,
+                        keys,
+                        toggle,
+                        pressed,
+                        menu,
+                        expanded,
+                        controls,
+                        className,
+                        disabled,
+                        onClick,
+                        children
+                      }: Readonly<ToolProps>) {
   const cls = ['btn ghost', menu ? 'icon-menu' : 'icon-only', toggle && 'toggle', className].filter(Boolean).join(' ');
   return (
     <button
@@ -53,14 +69,14 @@ export function Tool({ id, icon, label, tip, kbd, keys, toggle, pressed, menu, e
       disabled={disabled}
       onClick={onClick}
     >
-      {children ?? <Ico name={icon} />}
-      {menu && <Ico name="chevron" size={12} />}
+      {children ?? <Ico name={icon}/>}
+      {menu && <Ico name="chevron" size={12}/>}
     </button>
   );
 }
 
 /** A text button: its words are its name, and the tooltip says more. */
-function TextTool({ id, text, tip, kbd, keys, disabled, onClick }: Readonly<{
+function TextTool ({ id, text, tip, kbd, keys, disabled, onClick }: Readonly<{
   id: string;
   text: string;
   tip: string;
@@ -70,14 +86,15 @@ function TextTool({ id, text, tip, kbd, keys, disabled, onClick }: Readonly<{
   onClick: Click
 }>) {
   return (
-    <button type="button" className="btn ghost text-btn" id={id} data-tip={tip} data-kbd={kbd} aria-keyshortcuts={keys} disabled={disabled} onClick={onClick}>
+    <button type="button" className="btn ghost text-btn" id={id} data-tip={tip} data-kbd={kbd} aria-keyshortcuts={keys}
+            disabled={disabled} onClick={onClick}>
       {text}
     </button>
   );
 }
 
 /** A button that turns off while it has keyboard focus hands focus to the nearest button beside it. */
-function useFocusRescue(container: RefObject<HTMLElement | null>) {
+function useFocusRescue (container: RefObject<HTMLElement | null>) {
   const last = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     const el = container.current;
@@ -118,7 +135,17 @@ interface AppBarProps {
   onHelp: Click;
 }
 
-export function AppBar({ home, hasDocs, lowContrast, dark, onSwap, onNew, onContrast, onTheme, onHelp }: Readonly<AppBarProps>) {
+export function AppBar ({
+                          home,
+                          hasDocs,
+                          lowContrast,
+                          dark,
+                          onSwap,
+                          onNew,
+                          onContrast,
+                          onTheme,
+                          onHelp
+                        }: Readonly<AppBarProps>) {
   const bar = useRef<HTMLElement>(null);
   useFocusRescue(bar);
   const word = (
@@ -146,19 +173,23 @@ export function AppBar({ home, hasDocs, lowContrast, dark, onSwap, onNew, onCont
         <span className="brand-tag">Compare two versions of a document, picture or recording</span>
       </div>
       <div className="appbar-actions">
-        <Tool id="btn-swap" icon="swap" label="Swap A and B" disabled={!hasDocs} onClick={onSwap} />
-        <Tool id="btn-new" icon="newDoc" label="New comparison" tip="New comparison: start again with two documents" disabled={!hasDocs} onClick={onNew} />
-        <Tool id="btn-contrast" icon="contrast" label="Low contrast" tip="Low contrast: no borders, one background" toggle pressed={lowContrast} onClick={onContrast} />
-        <Tool id="btn-theme" icon="moon" label="Dark theme" tip={dark ? 'Switch to the light theme' : 'Switch to the dark theme'} className="theme-btn" pressed={dark} onClick={onTheme}>
+        <Tool id="btn-swap" icon="swap" label="Swap A and B" disabled={!hasDocs} onClick={onSwap}/>
+        <Tool id="btn-new" icon="newDoc" label="New comparison" tip="New comparison: start again with two documents"
+              disabled={!hasDocs} onClick={onNew}/>
+        <Tool id="btn-contrast" icon="contrast" label="Low contrast" tip="Low contrast: no borders, one background"
+              toggle pressed={lowContrast} onClick={onContrast}/>
+        <Tool id="btn-theme" icon="moon" label="Dark theme"
+              tip={dark ? 'Switch to the light theme' : 'Switch to the dark theme'} className="theme-btn" pressed={dark}
+              onClick={onTheme}>
           {/* The icon shows the theme it switches to, through CSS (styles.css). */}
           <span className="theme-moon">
-            <Ico name="moon" />
+            <Ico name="moon"/>
           </span>
           <span className="theme-sun">
-            <Ico name="sun" />
+            <Ico name="sun"/>
           </span>
         </Tool>
-        <Tool id="btn-help" icon="help" label="Help and keyboard shortcuts" kbd="?" onClick={onHelp} />
+        <Tool id="btn-help" icon="help" label="Help and keyboard shortcuts" kbd="?" onClick={onHelp}/>
       </div>
     </header>
   );
@@ -200,7 +231,9 @@ interface ToolbarProps {
   onPrev: Click;
   onNext: Click;
   onChangesOnly: Click;
-  onView(view: View): void;
+
+  onView (view: View): void;
+
   onMinimap: Click;
   onLines: Click;
   onBands: Click;
@@ -236,11 +269,12 @@ interface FrameProps {
  * the middle (centred), editing and getting it out on the right — each filled
  * by the tools for what is compared (text, images or audio).
  */
-export function ToolbarFrame({ kind, idle, same, left, middle, right }: Readonly<FrameProps>) {
+export function ToolbarFrame ({ kind, idle, same, left, middle, right }: Readonly<FrameProps>) {
   const bar = useRef<HTMLDivElement>(null);
   useFocusRescue(bar);
   return (
-    <div className={`toolbar${idle ? ' disabled' : ''}${same ? ' same' : ''}`} id="toolbar" data-kind={kind} role="toolbar" aria-label={`${MEDIA[kind].label} tools`} ref={bar}>
+    <div className={`toolbar${idle ? ' disabled' : ''}${same ? ' same' : ''}`} id="toolbar" data-kind={kind}
+         role="toolbar" aria-label={`${MEDIA[kind].label} tools`} ref={bar}>
       <div className="tcol left" role="group" aria-label="Changes">
         {left}
       </div>
@@ -253,22 +287,31 @@ export function ToolbarFrame({ kind, idle, same, left, middle, right }: Readonly
 }
 
 /** Undo and redo, which every kind of comparison has. */
-export function HistoryTools({ canUndo, canRedo, onUndo, onRedo }: Readonly<{ canUndo: boolean; canRedo: boolean; onUndo: Click; onRedo: Click }>) {
+export function HistoryTools ({ canUndo, canRedo, onUndo, onRedo }: Readonly<{
+  canUndo: boolean;
+  canRedo: boolean;
+  onUndo: Click;
+  onRedo: Click
+}>) {
   return (
     <>
-      <Tool id="btn-undo" icon="undo" label="Undo" kbd="Ctrl+Z" keys="Control+Z Meta+Z" disabled={!canUndo} onClick={onUndo} />
-      <Tool id="btn-redo" icon="redo" label="Redo" kbd="Ctrl+Shift+Z" keys="Control+Shift+Z Meta+Shift+Z" disabled={!canRedo} onClick={onRedo} />
+      <Tool id="btn-undo" icon="undo" label="Undo" kbd="Ctrl+Z" keys="Control+Z Meta+Z" disabled={!canUndo}
+            onClick={onUndo}/>
+      <Tool id="btn-redo" icon="redo" label="Redo" kbd="Ctrl+Shift+Z" keys="Control+Shift+Z Meta+Shift+Z"
+            disabled={!canRedo} onClick={onRedo}/>
     </>
   );
 }
 
 /** Sharing the review as a file, which every kind of comparison has. */
-export function ShareTool({ expanded, onClick }: Readonly<{ expanded: boolean; onClick: Click }>) {
-  return <Tool id="btn-share" icon="link" label="Share the review" tip="Share: save the comparison and its review as a file to send, or open one" menu expanded={expanded} onClick={onClick} />;
+export function ShareTool ({ expanded, onClick }: Readonly<{ expanded: boolean; onClick: Click }>) {
+  return <Tool id="btn-share" icon="link" label="Share the review"
+               tip="Share: save the comparison and its review as a file to send, or open one" menu expanded={expanded}
+               onClick={onClick}/>;
 }
 
 /** The text tools: changes, views, review and checking, copying across, redline and report. */
-export function TextToolbar(p: Readonly<ToolbarProps>) {
+export function TextToolbar (p: Readonly<ToolbarProps>) {
   const n = p.cmp?.hunks.length ?? 0;
   const split = p.view === 'split';
   return (
@@ -279,8 +322,8 @@ export function TextToolbar(p: Readonly<ToolbarProps>) {
       left={
         <>
           <div className="tgroup nav">
-            <Tool id="btn-prev" icon="up" label="Previous change" kbd="P" disabled={p.nav.prev} onClick={p.onPrev} />
-            <Tool id="btn-next" icon="down" label="Next change" kbd="N" disabled={p.nav.next} onClick={p.onNext} />
+            <Tool id="btn-prev" icon="up" label="Previous change" kbd="P" disabled={p.nav.prev} onClick={p.onPrev}/>
+            <Tool id="btn-next" icon="down" label="Next change" kbd="N" disabled={p.nav.next} onClick={p.onNext}/>
             <Tool
               id="btn-changes"
               icon="changesOnly"
@@ -294,15 +337,17 @@ export function TextToolbar(p: Readonly<ToolbarProps>) {
             />
           </div>
           {/* On a phone the column heads, where the counter usually is, scroll away. */}
-          <Counter cmp={p.cmp} current={p.current} className="counter-m" />
-          <StatsHint cmp={p.cmp} same={p.same} />
+          <Counter cmp={p.cmp} current={p.current} className="counter-m"/>
+          <StatsHint cmp={p.cmp} same={p.same}/>
         </>
       }
       middle={
         <>
-          <ViewSwitch view={p.view} disabled={!p.cmp} onView={p.onView} />
-          <Tool id="btn-minimap" icon="minimap" label="Minimap" tip="Minimap of each document beside the ruler" kbd="M" toggle pressed={p.minimap} disabled={!p.cmp} onClick={p.onMinimap} />
-          <Tool id="btn-lines" icon="lineNumbers" label="Line numbers" tip="Line numbers in the gutter" kbd="L" toggle pressed={p.lines} disabled={!p.cmp} onClick={p.onLines} />
+          <ViewSwitch view={p.view} disabled={!p.cmp} onView={p.onView}/>
+          <Tool id="btn-minimap" icon="minimap" label="Minimap" tip="Minimap of each document beside the ruler" kbd="M"
+                toggle pressed={p.minimap} disabled={!p.cmp} onClick={p.onMinimap}/>
+          <Tool id="btn-lines" icon="lineNumbers" label="Line numbers" tip="Line numbers in the gutter" kbd="L" toggle
+                pressed={p.lines} disabled={!p.cmp} onClick={p.onLines}/>
           <Tool
             id="btn-bands"
             icon="connector"
@@ -348,25 +393,30 @@ export function TextToolbar(p: Readonly<ToolbarProps>) {
               disabled={!p.cmp}
               onClick={p.onCheck}
             >
-              <Ico name="spell" />
+              <Ico name="spell"/>
               {p.check && !!p.issues && <span className="tbadge">{p.issues > 99 ? '99+' : p.issues}</span>}
             </Tool>
-            <Tool id="btn-check-menu" icon="chevron" label="Spelling and grammar options" tip="Language, Claude and your dictionary" menu expanded={p.menu === 'check'} disabled={!p.cmp} onClick={p.onCheckMenu}>
-              <span />
+            <Tool id="btn-check-menu" icon="chevron" label="Spelling and grammar options"
+                  tip="Language, Claude and your dictionary" menu expanded={p.menu === 'check'} disabled={!p.cmp}
+                  onClick={p.onCheckMenu}>
+              <span/>
             </Tool>
           </div>
-          <hr className="tsep" aria-orientation="vertical" />
+          <hr className="tsep" aria-orientation="vertical"/>
           <div className="tgroup pages">
-            <TextTool id="btn-page-prev" text="Previous page" tip="Scroll up a screen" kbd="Page Up" keys="PageUp" disabled={p.nav.pageUp} onClick={p.onPagePrev} />
-            <TextTool id="btn-page-next" text="Next page" tip="Scroll down a screen" kbd="Page Down" keys="PageDown" disabled={p.nav.pageDown} onClick={p.onPageNext} />
+            <TextTool id="btn-page-prev" text="Previous page" tip="Scroll up a screen" kbd="Page Up" keys="PageUp"
+                      disabled={p.nav.pageUp} onClick={p.onPagePrev}/>
+            <TextTool id="btn-page-next" text="Next page" tip="Scroll down a screen" kbd="Page Down" keys="PageDown"
+                      disabled={p.nav.pageDown} onClick={p.onPageNext}/>
           </div>
         </>
       }
       right={
         <>
           <div className="tgroup edit" role="group" aria-label="Edit">
-            <HistoryTools canUndo={p.canUndo} canRedo={p.canRedo} onUndo={p.onUndo} onRedo={p.onRedo} />
-            <Tool id="btn-all" icon="merge" label="Copy changes" tip="Copy this change or every change across" menu expanded={p.menu === 'copy'} disabled={n === 0} onClick={p.onCopy} />
+            <HistoryTools canUndo={p.canUndo} canRedo={p.canRedo} onUndo={p.onUndo} onRedo={p.onRedo}/>
+            <Tool id="btn-all" icon="merge" label="Copy changes" tip="Copy this change or every change across" menu
+                  expanded={p.menu === 'copy'} disabled={n === 0} onClick={p.onCopy}/>
             <Tool
               id="btn-redline"
               icon="download"
@@ -387,10 +437,11 @@ export function TextToolbar(p: Readonly<ToolbarProps>) {
               disabled={!p.cmp}
               onClick={p.onReport}
             />
-            <ShareTool expanded={p.menu === 'share'} onClick={p.onShare} />
+            <ShareTool expanded={p.menu === 'share'} onClick={p.onShare}/>
           </div>
           <div className="tgroup panel">
-            <Tool id="btn-sidebar" icon="sidebar" label="List of changes" kbd="S" toggle pressed={p.sidebar && !!p.cmp} controls="changes" disabled={!p.cmp} onClick={p.onSidebar} />
+            <Tool id="btn-sidebar" icon="sidebar" label="List of changes" kbd="S" toggle pressed={p.sidebar && !!p.cmp}
+                  controls="changes" disabled={!p.cmp} onClick={p.onSidebar}/>
           </div>
         </>
       }
@@ -404,7 +455,11 @@ const VIEWS: ReadonlyArray<{ view: View; icon: IconName; label: string; tip: str
 ];
 
 /** Side by side or unified. */
-function ViewSwitch({ view, disabled, onView }: Readonly<{ view: View; disabled: boolean; onView(view: View): void }>) {
+function ViewSwitch ({ view, disabled, onView }: Readonly<{
+  view: View;
+  disabled: boolean;
+  onView (view: View): void
+}>) {
   return (
     <Segmented
       id="view"
@@ -412,7 +467,14 @@ function ViewSwitch({ view, disabled, onView }: Readonly<{ view: View; disabled:
       value={view}
       disabled={disabled}
       onChange={onView}
-      segments={VIEWS.map((v) => ({ value: v.view, id: `btn-view-${v.view}`, label: v.label, tip: v.tip, kbd: 'V', content: <Ico name={v.icon} /> }))}
+      segments={VIEWS.map((v) => ({
+        value: v.view,
+        id: `btn-view-${v.view}`,
+        label: v.label,
+        tip: v.tip,
+        kbd: 'V',
+        content: <Ico name={v.icon}/>
+      }))}
     />
   );
 }
@@ -421,7 +483,7 @@ function ViewSwitch({ view, disabled, onView }: Readonly<{ view: View; disabled:
  * The summary of the changes behind an icon: shown while the pointer rests on
  * it or it has keyboard focus, and kept open by a click (a tap on a phone).
  */
-function StatsHint({ cmp, same }: Readonly<{ cmp: Comparison | null; same: string }>) {
+function StatsHint ({ cmp, same }: Readonly<{ cmp: Comparison | null; same: string }>) {
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
   const [pinned, setPinned] = useState(false);
@@ -435,18 +497,21 @@ function StatsHint({ cmp, same }: Readonly<{ cmp: Comparison | null; same: strin
   // A press anywhere else, or Escape, puts it away.
   useEffect(() => {
     if (!open) return;
+
     const away = (e: PointerEvent) => {
       if (!box.current?.contains(e.target as Node)) {
         setPinned(false);
         setHover(false);
       }
     };
+
     const esc = (e: globalThis.KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       setPinned(false);
       setHover(false);
       setFocus(false);
     };
+
     document.addEventListener('pointerdown', away, true);
     document.addEventListener('keydown', esc);
     return () => {
@@ -484,7 +549,7 @@ function StatsHint({ cmp, same }: Readonly<{ cmp: Comparison | null; same: strin
           setPinned(false);
         }}
       >
-        <Ico name="info" />
+        <Ico name="info"/>
       </button>
       <div className="stats-card" id="stats" role="tooltip" hidden={!open}>
         {s &&
@@ -493,9 +558,9 @@ function StatsHint({ cmp, same }: Readonly<{ cmp: Comparison | null; same: strin
           ) : (
             <>
               <span className="stats-head">Paragraphs</span>
-              <Stat kind="mod" count={s.changed} words="changed" />
-              <Stat kind="del" count={s.removed} words="only in A" />
-              <Stat kind="ins" count={s.added} words="only in B" />
+              <Stat kind="mod" count={s.changed} words="changed"/>
+              <Stat kind="del" count={s.removed} words="only in A"/>
+              <Stat kind="ins" count={s.added} words="only in B"/>
             </>
           ))}
       </div>
@@ -503,7 +568,7 @@ function StatsHint({ cmp, same }: Readonly<{ cmp: Comparison | null; same: strin
   );
 }
 
-function Stat({ kind, count, words }: Readonly<{ kind: string; count: number; words: string }>) {
+function Stat ({ kind, count, words }: Readonly<{ kind: string; count: number; words: string }>) {
   return (
     <span className={`stat ${kind}`}>
       <b>{count.toLocaleString()}</b> {words}
