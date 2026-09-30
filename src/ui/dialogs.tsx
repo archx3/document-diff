@@ -325,6 +325,7 @@ export function HelpDialog() {
             <Key keys={['A', 'B']} what="Listen to A or B, at the same moment" />
             <Key keys={['L']} what="Loop the difference" />
             <Key keys={['T']} what="Transcribe, or show the transcripts" />
+            <Key keys={['T', 'Esc']} what="Stop transcribing" />
             <Key keys={['1', '2', '3']} what="Waveform, spectrogram, loudness" />
             <Key keys={['←', '→']} what="Back or on 5 seconds" />
           </dl>

@@ -191,6 +191,30 @@ test('transcribed on this device, and compared as documents are', async ({ page 
   await expect(page.locator('#btn-transcribe')).toHaveText('Hide transcript');
 });
 
+test('a transcription started by mistake can be stopped, and started again', async ({ page }) => {
+  test.skip(!transcribing, 'set TRANSCRIBE_TESTS=1 to run the speech model');
+  test.setTimeout(240_000);
+  await openRecordings(page);
+  const button = page.locator('#toolbar #btn-transcribe');
+  await button.click();
+  // Under way: a stop button beside it, and one between the transcripts' heads.
+  await expect(page.locator('#btn-transcribe-stop')).toBeVisible();
+  await expect(page.locator('.at-said-cmp [data-transcript-stop]')).toBeVisible();
+  await page.locator('#btn-transcribe-stop').click();
+  await expect(button).toHaveText('Transcribe');
+  await expect(page.locator('#btn-transcribe-stop')).toHaveCount(0);
+  await expect(page.locator('.at-said-cmp')).toHaveCount(0);
+  // Esc stops it too.
+  await button.click();
+  await expect(page.locator('#btn-transcribe-stop')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(button).toHaveText('Transcribe');
+  // And it runs to the end when left to.
+  await button.click();
+  await expect(page.locator('.at-said-cmp .cell.b')).toContainText(['engineers'], { timeout: 180_000 });
+  await expect(button).toHaveText('Hide transcript');
+});
+
 test('a tune has no words: nothing made up is shown', async ({ page }) => {
   test.skip(!transcribing, 'set TRANSCRIBE_TESTS=1 to run the speech model');
   test.setTimeout(240_000);
@@ -222,4 +246,21 @@ test('transcribing on the server asks first, then compares what was said', async
   const said = page.locator('.at-said-cmp');
   await expect(said.locator('.cell.b')).toContainText(['engineers'], { timeout: 60_000 });
   await expect(said.locator('.cell.a')).toContainText(['grew']);
+});
+
+test('a transcription on the server can be stopped too', async ({ page, request }) => {
+  test.skip(!transcribing, 'set TRANSCRIBE_TESTS=1 (and run npm run server) to transcribe on the server');
+  const up = await request.get('/api/transcribe').then(async (r) => r.ok() && !!(await r.json()).available, () => false);
+  test.skip(!up, 'the transcription service is not running (npm run server)');
+  await openRecordings(page);
+  await page.locator('#btn-transcribe-where').click();
+  await page.locator('.where-menu [data-where="server"]').click();
+  await page.locator('dialog.consent [data-consent="yes"]').click();
+  // Stopped while the service works on it: the request is dropped, and the service stops too.
+  await page.locator('#btn-transcribe-stop').click();
+  await expect(page.locator('#toolbar #btn-transcribe')).toHaveText('Transcribe');
+  await expect(page.locator('.at-said-cmp')).toHaveCount(0);
+  // Asked once for this page: started again, it runs to the end.
+  await page.locator('#toolbar #btn-transcribe').click();
+  await expect(page.locator('.at-said-cmp .cell.b')).toContainText(['engineers'], { timeout: 60_000 });
 });

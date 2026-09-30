@@ -104,10 +104,11 @@ test('the ruler sits between the copy arrows, and dragging its frame scrolls the
   const gutter = (await page.locator('.colhead.gut').boundingBox())!;
   expect(Math.abs(overview.x + overview.width / 2 - (gutter.x + gutter.width / 2))).toBeLessThan(2);
   const row = rowByText(page, 'This agreement is made on');
+  // Each document's arrow is beside it, sending its version across.
   const toA = (await row.locator('.act.to-a').boundingBox())!;
   const toB = (await row.locator('.act.to-b').boundingBox())!;
-  expect(toA.x + toA.width).toBeLessThanOrEqual(overview.x);
-  expect(toB.x).toBeGreaterThanOrEqual(overview.x + overview.width);
+  expect(toB.x + toB.width).toBeLessThanOrEqual(overview.x);
+  expect(toA.x).toBeGreaterThanOrEqual(overview.x + overview.width);
   await expect(page.locator('.ruler .mark')).toHaveCount(7);
 
   const view = (await page.locator('.ruler-view').boundingBox())!;
@@ -136,8 +137,8 @@ test('the minimap draws each document on either side of the ruler', async ({ pag
   expect(a.x + a.width).toBeLessThanOrEqual(ruler.x);
   expect(b.x).toBeGreaterThanOrEqual(ruler.x + ruler.width);
   // The arrows moved out to make room.
-  const toA = (await rowByText(page, 'This agreement is made on').locator('.act.to-a').boundingBox())!;
-  expect(toA.x + toA.width).toBeLessThanOrEqual(a.x);
+  const toB = (await rowByText(page, 'This agreement is made on').locator('.act.to-b').boundingBox())!;
+  expect(toB.x + toB.width).toBeLessThanOrEqual(a.x);
   const inked = (side: string) =>
     page.locator(`.mm.${side}`).evaluate((c: HTMLCanvasElement) => {
       const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;

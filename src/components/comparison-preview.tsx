@@ -20,10 +20,10 @@ function Row({ kind, a, b, current }: Readonly<{ kind: Kind; a?: ReactNode; b: R
         {kind !== 'same' && (
           <>
             <span className={styles.act}>
-              <Icon name="chevronsLeft" size={13} />
+              <Icon name="chevronsRight" size={13} />
             </span>
             <span className={styles.act}>
-              <Icon name="chevronsRight" size={13} />
+              <Icon name="chevronsLeft" size={13} />
             </span>
           </>
         )}

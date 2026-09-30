@@ -1,9 +1,9 @@
 /**
  * Comparing pictures, pixel by pixel: which pixels differ (beyond a
  * sensitivity), how much of the picture that is, the areas that changed as
- * boxes, and a small fingerprint by which a picture is known again after
- * being resized or saved again. Pure functions on RGBA pixels; the page
- * decodes and draws the pictures (image/draw.ts).
+ * boxes, and how a picture looks (small, with its fingerprint), by which it is
+ * known again after being resized or saved again. Pure functions on RGBA
+ * pixels; the page decodes and draws the pictures (image/draw.ts).
  */
 
 /** RGBA pixels, as a canvas gives them. */
@@ -206,4 +206,96 @@ export function fingerprintDistance(x: string, y: string): number {
     }
   }
   return n + Math.abs(x.length - y.length) * 4;
+}
+
+/** Pixels shrunk (or grown) to `w` × `h`, each the average of the area it covers (pixels it covers in part count in part), transparent ones as white. */
+export function shrinkPixels(p: Pixels, w: number, h: number): Pixels {
+  const data = new Uint8ClampedArray(w * h * 4);
+  const sx = p.width / w;
+  const sy = p.height / h;
+  for (let ty = 0; ty < h; ty++) {
+    const y0 = ty * sy;
+    const y1 = y0 + sy;
+    for (let tx = 0; tx < w; tx++) {
+      const x0 = tx * sx;
+      const x1 = x0 + sx;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      let area = 0;
+      for (let y = Math.floor(y0); y < Math.ceil(y1) && y < p.height; y++) {
+        const wy = Math.min(y + 1, y1) - Math.max(y, y0);
+        for (let x = Math.floor(x0); x < Math.ceil(x1) && x < p.width; x++) {
+          const wt = wy * (Math.min(x + 1, x1) - Math.max(x, x0));
+          const k = (y * p.width + x) * 4;
+          const alpha = p.data[k + 3]! / 255;
+          r += (p.data[k]! * alpha + 255 * (1 - alpha)) * wt;
+          g += (p.data[k + 1]! * alpha + 255 * (1 - alpha)) * wt;
+          b += (p.data[k + 2]! * alpha + 255 * (1 - alpha)) * wt;
+          area += wt;
+        }
+      }
+      data.set(area ? [r / area, g / area, b / area, 255] : [255, 255, 255, 255], (ty * w + tx) * 4);
+    }
+  }
+  return { width: w, height: h, data };
+}
+
+/** The size a picture is compared at to know it again: small, so that resizing or saving it again changes nothing that counts. */
+const LOOK = 64;
+
+/** How a picture looks, to know it again in another document: small, its proportions, and its fingerprint. */
+export interface Look {
+  pixels: Pixels;
+  /** Width over height. */
+  aspect: number;
+  print: string;
+}
+
+/** How a picture of `width` × `height` looks, from its pixels (at any size). */
+export function lookOf(p: Pixels, width = p.width, height = p.height): Look {
+  const pixels = shrinkPixels(p, LOOK, LOOK);
+  return { pixels, aspect: width / Math.max(1, height), print: fingerprint(pixels) };
+}
+
+/** How far apart two opaque pixels look (weighted as the eye sees colour, as diffPixels measures): 0 to 510. */
+function distance(a: Pixels, i: number, b: Pixels, j: number): number {
+  return Math.abs(a.data[i]! - b.data[j]!) * 0.6 + Math.abs(a.data[i + 1]! - b.data[j + 1]!) * 1.2 + Math.abs(a.data[i + 2]! - b.data[j + 2]!) * 0.3;
+}
+
+/** Whether every pixel of `a` has one at its place in `b`, or next to it, that looks the same (nearer than `limit`). */
+function matches(a: Pixels, b: Pixels, limit: number): boolean {
+  for (let y = 0; y < a.height; y++) {
+    for (let x = 0; x < a.width; x++) {
+      const i = (y * a.width + x) * 4;
+      let best = Infinity;
+      for (let dy = -1; dy <= 1 && best >= limit; dy++) {
+        const yy = y + dy;
+        if (yy < 0 || yy >= b.height) continue;
+        for (let dx = -1; dx <= 1 && best >= limit; dx++) {
+          const xx = x + dx;
+          if (xx < 0 || xx >= b.width) continue;
+          best = Math.min(best, distance(a, i, b, (yy * b.width + xx) * 4));
+        }
+      }
+      if (best >= limit) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Whether two pictures look the same: the same proportions and, at the same
+ * small size, no pixel that differs to the eye (by the measure, and at the
+ * sensitivity, the picture view uses) from those at and around its place in
+ * the other. A picture resized or saved again looks the same (resizing moves
+ * edges by less than a pixel at that size); one with anything drawn
+ * differently, or in other colours, doesn't.
+ */
+export function sameLook(x: Look, y: Look, sensitivity = 0.9): boolean {
+  if (Math.abs(x.aspect - y.aspect) > 0.03 * Math.max(x.aspect, y.aspect)) return false;
+  // Pictures far apart by their fingerprints aren't compared pixel by pixel.
+  if (fingerprintDistance(x.print, y.print) > 12) return false;
+  const limit = Math.max(1, (1 - sensitivity) * 510);
+  return matches(x.pixels, y.pixels, limit) && matches(y.pixels, x.pixels, limit);
 }

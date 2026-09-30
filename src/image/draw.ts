@@ -1,12 +1,12 @@
 /**
  * Pictures in the page: decoding them to pixels (image/diff.ts works on
- * those), saving pixels as a PNG, and fingerprinting a document's pictures
- * so the same picture is known again in the other document even when its
- * bytes differ (resized, or saved again by another program).
+ * those), saving pixels as a PNG, and knowing a document's pictures again in
+ * another document when they look the same, though their bytes differ
+ * (resized, or saved again by another program).
  */
-import type { Block, Doc, Span } from '../core/model';
-import type { Pixels } from './diff';
-import { fingerprint } from './diff';
+import type { Block, Doc, InlineObject, Span } from '../core/model';
+import type { Look, Pixels } from './diff';
+import { lookOf, sameLook } from './diff';
 
 /** A picture loaded from a URL (blob: or data:). */
 export function loadImage(src: string): Promise<HTMLImageElement> {
@@ -40,33 +40,63 @@ export function pngOf(p: Pixels): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('The picture could not be saved.'))), 'image/png'));
 }
 
-/** A picture's fingerprint from its bytes, or null where the browser can't decode it here. */
-async function fingerprintOf(data: Uint8Array, mime: string): Promise<string | null> {
+/** The size a picture is decoded at to see how it looks (its longer side). */
+const DECODE = 256;
+
+/** How a picture looks, from its bytes, or null where the browser can't decode it here. */
+async function lookOfBytes(data: Uint8Array, mime: string): Promise<Look | null> {
   if (typeof createImageBitmap !== 'function' || typeof document === 'undefined') return null;
   try {
-    const bmp = await createImageBitmap(new Blob([data as BlobPart], { type: mime }));
-    // Small is enough: the fingerprint is made from 9 × 8 cells.
-    const w = Math.max(9, Math.min(64, bmp.width));
-    const h = Math.max(8, Math.round((w * bmp.height) / Math.max(1, bmp.width)));
-    const fp = fingerprint(pixelsOf(bmp, w, h));
-    bmp.close();
-    return fp;
+    const full = await createImageBitmap(new Blob([data as BlobPart], { type: mime }));
+    const { width, height } = full;
+    // Shrunk by the browser as it decodes (well: every pixel counts), then to the size compared at.
+    const scale = Math.min(1, DECODE / Math.max(width, height));
+    const w = Math.max(1, Math.round(width * scale));
+    const h = Math.max(1, Math.round(height * scale));
+    const small = scale < 1 ? await createImageBitmap(full, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' }) : full;
+    const look = lookOf(pixelsOf(small, w, h), width, height);
+    if (small !== full) small.close();
+    full.close();
+    return look;
   } catch {
     return null;
   }
 }
 
+/** The pictures seen in this page (in any document), by the key each is known by, and how it looks. */
+const seen: Array<{ key: string; look: Look }> = [];
+/** The key each picture's bytes are known by: its own, or that of the first picture seen that looks the same. */
+const knownAs = new Map<string, string>();
+
+/** The key a picture is known by: that of a picture seen before that looks the same, or its own. */
+async function keyFor(obj: InlineObject): Promise<string> {
+  const hit = knownAs.get(obj.key);
+  if (hit) return hit;
+  const look = obj.data && obj.mime ? await lookOfBytes(obj.data, obj.mime) : null;
+  if (!look) return obj.key;
+  const same = knownAs.get(obj.key) ?? seen.find((s) => sameLook(s.look, look))?.key;
+  if (same) {
+    knownAs.set(obj.key, same);
+    return same;
+  }
+  seen.push({ key: obj.key, look });
+  knownAs.set(obj.key, obj.key);
+  return obj.key;
+}
+
 /**
- * The document with each picture known by what it shows (its fingerprint)
- * rather than its bytes, so a picture that was only resized or saved again
- * compares as the same picture. Pictures that can't be decoded keep their key.
- * Only for a document just read, before anything compares it: the keys are
- * changed in place.
+ * The document with each picture known again when it is in another document
+ * too, though its bytes differ (resized, or saved again by another program):
+ * a picture that looks the same as one seen before takes its key, so the two
+ * compare as the same picture. A picture changed in any way that shows keeps
+ * its own key, and is a difference. Pictures that can't be decoded keep their
+ * key. Only for a document just read, before anything compares it: the keys
+ * are changed in place.
  */
-export async function withFingerprints(doc: Doc): Promise<Doc> {
-  const found = new Map<Uint8Array, string | null>();
+export async function withKnownPictures(doc: Doc): Promise<Doc> {
+  const keys = new Map<InlineObject, string>();
   const visit = async (spans: readonly Span[]) => {
-    for (const s of spans) if (s.obj?.kind === 'image' && s.obj.data && s.obj.mime && !found.has(s.obj.data)) found.set(s.obj.data, await fingerprintOf(s.obj.data, s.obj.mime));
+    for (const s of spans) if (s.obj?.kind === 'image' && !keys.has(s.obj)) keys.set(s.obj, await keyFor(s.obj));
   };
   const walk = async (blocks: readonly Block[]): Promise<void> => {
     for (const b of blocks) {
@@ -76,21 +106,7 @@ export async function withFingerprints(doc: Doc): Promise<Doc> {
     }
   };
   await walk(doc.blocks);
-  if (![...found.values()].some(Boolean)) return doc;
   // The same objects, keys changed in place: the document's blocks (and a Word file's links to them) stay as they are.
-  const rekey = (spans: readonly Span[]) => {
-    for (const s of spans) {
-      const fp = s.obj?.data && found.get(s.obj.data);
-      if (s.obj && fp) s.obj.key = `pic:${fp}`;
-    }
-  };
-  const apply = (blocks: readonly Block[]) => {
-    for (const b of blocks) {
-      if (b.type === 'p') rekey(b.spans);
-      else if (b.type === 'table') for (const r of b.rows) for (const c of r.cells) apply(c.blocks);
-      else if (b.type === 'opaque') apply(b.blocks);
-    }
-  };
-  apply(doc.blocks);
+  for (const [obj, key] of keys) obj.key = key;
   return doc;
 }

@@ -162,7 +162,15 @@ export function TranscriptCompare({ ctl, bands }: { ctl: AudioCompare; bands: bo
     <section className="at-said-cmp" aria-label="What was said">
       <div className="colheads said-heads">
         {head('a')}
-        <div className="colhead gut">{cmp && !silent && <Counter cmp={cmp} current={current} />}</div>
+        <div className="colhead gut">
+          {t.status === 'working' ? (
+            <button type="button" className="btn sm" data-transcript-stop data-tip="Stop transcribing (Esc)" onClick={ctl.stopTranscript}>
+              Stop
+            </button>
+          ) : (
+            cmp && !silent && <Counter cmp={cmp} current={current} />
+          )}
+        </div>
         {head('b')}
       </div>
       {t.status === 'error' && <p className="field-error said-error">{t.message}</p>}

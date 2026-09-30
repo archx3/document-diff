@@ -157,11 +157,11 @@ test.describe('unified view', () => {
     const [a, b] = [await box(row.locator('.cell.a')), await box(row.locator('.cell.b'))];
     expect(Math.abs(a.x - b.x)).toBeLessThan(1);
     expect(a.y + a.height).toBeLessThanOrEqual(b.y + 1);
-    // The arrows sit beside each version, pointing up into A and down into B.
+    // The arrows sit beside each version, each sending it to the other.
     const [toA, toB] = [await box(row.locator('.act.to-a')), await box(row.locator('.act.to-b'))];
-    expect(toA.x + toA.width).toBeLessThanOrEqual(a.x);
-    expect(toA.y).toBeLessThan(b.y);
-    expect(toB.y).toBeGreaterThanOrEqual(b.y);
+    expect(toB.x + toB.width).toBeLessThanOrEqual(a.x);
+    expect(toB.y).toBeLessThan(b.y);
+    expect(toA.y).toBeGreaterThanOrEqual(b.y);
     // Unchanged paragraphs once.
     await expect(page.locator('.row.k-eq .cell.b').first()).toBeHidden();
     const overview = await box(page.locator('#overview'));

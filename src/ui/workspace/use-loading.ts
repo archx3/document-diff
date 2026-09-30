@@ -11,7 +11,7 @@ import type { Doc } from '../../core/model';
 import type { CompareOptions } from '../../core/tokens';
 import { orderVersions, paragraphHistory } from '../../core/versions';
 import { ACCEPTED_EXTENSIONS, LoadError, loadFile, loadPaste } from '../../formats/load';
-import { withFingerprints } from '../../image/draw';
+import { withKnownPictures } from '../../image/draw';
 import type { CloudKind, DriveRevision } from '../../lib/cloud';
 import { CLOUD_NAME, PickCancelled, availableClouds, driveRefOf, driveRevisionFile, noteDrive, pickFromCloud } from '../../lib/cloud';
 import { noteSource } from '../../lib/sources';
@@ -194,7 +194,7 @@ export function useLoading({ history, a, b, kind, cmp, opts, toast, setBusy, dia
     setBusy(`Opening ${name}…`);
     try {
       const content = await unpackReview(bytes, password);
-      for (const d of new Set([content.docs.a, content.docs.b, ...content.versions])) if (d) await withFingerprints(d);
+      for (const d of new Set([content.docs.a, content.docs.b, ...content.versions])) if (d) await withKnownPictures(d);
       applyReview(content, name);
       setDialog(null);
     } catch (err) {

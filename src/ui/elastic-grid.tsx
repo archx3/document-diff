@@ -267,17 +267,16 @@ function sameLine(x: Line, y: Line): boolean {
   return x.part === y.part && x.row.hunk === y.row.hunk && x.na === y.na && x.nb === y.nb && x.arrow === y.arrow && x.first === y.first;
 }
 
-/** The arrow on one side of a change: A's pulls B's version in, B's pulls A's. */
+/** The arrow on one side of a change: A's sends A's version to B, B's sends B's to A. */
 function HunkArrow({ side, kind, hunk, onCopyHunk }: { side: 'a' | 'b'; kind: ActKind; hunk: number; onCopyHunk: ElasticGridProps['onCopyHunk'] }) {
   const [toA, toB] = actLabels({ kind });
-  const dir: Dir = side !== 'a' ? 'r2l':  'l2r';
-  const text = side !== 'a' ? toA : toB;
-
-  const flippedSide = side === 'a' ? 'b' : 'a'
-
+  const dir: Dir = side === 'a' ? 'l2r' : 'r2l';
+  const text = side === 'a' ? toB : toA;
+  /** The side it copies to. */
+  const to = side === 'a' ? 'b' : 'a';
   return (
-    <button type="button" className={`act to-${flippedSide}`} data-act={dir} data-tip={text} aria-label={text} onClick={() => onCopyHunk(hunk, dir)}>
-      <Ico name={flippedSide === 'a' ? 'chevronsLeft' : 'chevronsRight'} />
+    <button type="button" className={`act to-${to}`} data-act={dir} data-tip={text} aria-label={text} onClick={() => onCopyHunk(hunk, dir)}>
+      <Ico name={to === 'a' ? 'chevronsLeft' : 'chevronsRight'} />
     </button>
   );
 }

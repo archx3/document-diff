@@ -212,11 +212,11 @@ export function DocReplica() {
     }
     const gutter = k !== 'same' && (
       <>
-        <button type="button" className={styles.act} title="Use B's version in A" aria-label="Use B's version in A" onClick={() => copy(p.id, 'a')}>
-          <Icon name="chevronsLeft" size={12} />
-        </button>
         <button type="button" className={styles.act} title="Use A's version in B" aria-label="Use A's version in B" onClick={() => copy(p.id, 'b')}>
           <Icon name="chevronsRight" size={12} />
+        </button>
+        <button type="button" className={styles.act} title="Use B's version in A" aria-label="Use B's version in A" onClick={() => copy(p.id, 'a')}>
+          <Icon name="chevronsLeft" size={12} />
         </button>
       </>
     );

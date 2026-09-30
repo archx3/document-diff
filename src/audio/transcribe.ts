@@ -42,22 +42,41 @@ function base(): string {
   }
 }
 
-/** What was said in a recording (mono samples at 16 kHz), with each word's time. */
-export function transcribe(audio: Float32Array, onProgress?: (p: TranscribeProgress) => void, language?: string): Promise<Transcript> {
+/** The error a stopped transcription ends with. */
+export function stopped(): DOMException {
+  return new DOMException('The transcription was stopped.', 'AbortError');
+}
+
+/**
+ * What was said in a recording (mono samples at 16 kHz), with each word's
+ * time. `signal` stops it: the model can't be interrupted while it listens,
+ * so the worker is ended (and the next transcription starts a new one, with
+ * the model from the browser's cache).
+ */
+export function transcribe(audio: Float32Array, onProgress?: (p: TranscribeProgress) => void, language?: string, signal?: AbortSignal): Promise<Transcript> {
+  if (signal?.aborted) return Promise.reject(stopped());
   worker ??= new Worker(new URL('./transcribe.worker.ts', import.meta.url), { type: 'module' });
   const id = ++seq;
   const w = worker;
   return new Promise((resolve, reject) => {
+    const stop = () => {
+      w.removeEventListener('message', on);
+      if (worker === w) worker = null;
+      w.terminate();
+      reject(stopped());
+    };
     const on = (e: MessageEvent<WorkerOut>) => {
       const m = e.data;
       if (m.id !== id) return;
       if (m.type === 'progress') onProgress?.(m.stage === 'model' ? { stage: 'model', done: m.done ?? 0 } : { stage: 'transcribing' });
       else {
         w.removeEventListener('message', on);
+        signal?.removeEventListener('abort', stop);
         if (m.type === 'done') resolve({ text: m.text, words: m.words, quiet: m.quiet });
         else reject(new Error(m.message));
       }
     };
+    signal?.addEventListener('abort', stop, { once: true });
     w.addEventListener('message', on);
     // The samples are copied: the caller keeps its own for drawing and playing.
     const msg: WorkerIn = { id, audio: audio.slice(), base: base(), language };

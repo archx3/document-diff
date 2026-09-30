@@ -79,7 +79,8 @@ export async function transcribeOnServer(audio: Float32Array, language = 'auto',
       signal,
       cache: 'no-store',
     });
-  } catch {
+  } catch (err) {
+    if (signal?.aborted) throw err;
     throw new Error('The transcription server can’t be reached.');
   }
   const body = (await res.json().catch(() => ({}))) as { text?: string; words?: Word[]; error?: string };

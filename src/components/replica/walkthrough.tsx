@@ -22,9 +22,11 @@ const REPLICA = { text: DocReplica, image: ImageReplica, audio: AudioReplica };
 /**
  * Steps beside a replica of the workspace. The current step's part of the
  * replica is outlined; clicking an outlined-on-hover part shows its step. The
- * replica itself works, so each step can be tried as it is read.
+ * replica itself works, so each step can be tried as it is read. `wide`: in a
+ * band as wide as the page, all the room beyond the usual width goes to the
+ * replica.
  */
-export function Walkthrough({ kind, steps, label = 'Step' }: { kind: keyof typeof REPLICA; steps: Step[]; label?: string }) {
+export function Walkthrough({ kind, steps, label = 'Step', wide = false }: { kind: keyof typeof REPLICA; steps: Step[]; label?: string; wide?: boolean }) {
   const [i, setI] = useState(0);
   const Replica = REPLICA[kind];
   const step = steps[i]!;
@@ -43,7 +45,7 @@ export function Walkthrough({ kind, steps, label = 'Step' }: { kind: keyof typeo
   }, [steps, step.focus]);
 
   return (
-    <div className={styles.walk}>
+    <div className={wide ? `${styles.walk} ${styles.wide}` : styles.walk}>
       <ol className={styles.steps}>
         {steps.map((s, n) => (
           <li key={s.title} className={styles.step} data-on={n === i || undefined}>

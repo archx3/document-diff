@@ -95,20 +95,26 @@ export function AudioModes({ ctl }: { ctl: AudioCompare }) {
           <Ico name="transcript" />
           <span>{t.status === 'working' ? transcribing(t, true) : t.status === 'done' ? (ctl.showTranscript ? 'Hide transcript' : 'Show transcript') : 'Transcribe'}</span>
         </button>
-        {ctl.transcriptAvailable && (
-          <button
-            type="button"
-            className="btn sm split-more"
-            id="btn-transcribe-where"
-            aria-haspopup="true"
-            aria-expanded={!!menu || undefined}
-            aria-label="Transcript options"
-            data-tip={both ? `Transcript options (transcribing ${WHERE[ctl.where].label.toLowerCase()})` : 'Transcript options'}
-            disabled={t.status === 'working'}
-            onClick={(e) => setMenu(menu ? null : e.currentTarget)}
-          >
-            <Ico name="chevron" size={12} />
+        {t.status === 'working' ? (
+          // Started by mistake, or taking too long: it stops, and what was shown before comes back.
+          <button type="button" className="btn sm split-more" id="btn-transcribe-stop" aria-label="Stop transcribing" data-tip="Stop transcribing (Esc)" onClick={ctl.stopTranscript}>
+            <Ico name="close" size={12} />
           </button>
+        ) : (
+          ctl.transcriptAvailable && (
+            <button
+              type="button"
+              className="btn sm split-more"
+              id="btn-transcribe-where"
+              aria-haspopup="true"
+              aria-expanded={!!menu || undefined}
+              aria-label="Transcript options"
+              data-tip={both ? `Transcript options (transcribing ${WHERE[ctl.where].label.toLowerCase()})` : 'Transcript options'}
+              onClick={(e) => setMenu(menu ? null : e.currentTarget)}
+            >
+              <Ico name="chevron" size={12} />
+            </button>
+          )
         )}
       </span>
       {menu && (
@@ -245,7 +251,9 @@ export function audioKey(ctl: AudioCompare, e: { key: string; shiftKey?: boolean
   else if (e.key === 'l') ctl.setLoop(!ctl.loop);
   else if (e.key === 'c') ctl.setAnnotate(!ctl.annotate);
   else if (e.key === 'm') ctl.setMuted(!ctl.muted);
-  else if (e.key === 't') ctl.transcript.status === 'done' ? ctl.setShowTranscript(!ctl.showTranscript) : ctl.runTranscript();
+  // T transcribes, shows and hides the transcript, and stops a transcription under way; so does Esc.
+  else if (e.key === 't') ctl.transcript.status === 'working' ? ctl.stopTranscript() : ctl.transcript.status === 'done' ? ctl.setShowTranscript(!ctl.showTranscript) : ctl.runTranscript();
+  else if (e.key === 'Escape' && ctl.transcript.status === 'working') ctl.stopTranscript();
   else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') ctl.seek(ctl.heard, ctl.time + (e.key === 'ArrowRight' ? 5 : -5));
   else if (e.key === '+' || e.key === '=') ctl.setZoom(Math.min(64, ctl.zoom * 1.5));
   else if (e.key === '-') ctl.setZoom(Math.max(1, ctl.zoom / 1.5));

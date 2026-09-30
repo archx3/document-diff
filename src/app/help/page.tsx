@@ -230,7 +230,7 @@ export default function HelpPage() {
         </div>
       </section>
 
-      <section className={`${content.band} ${content.tinted}`} aria-labelledby="where">
+      <section className={`${content.band} ${content.tinted} ${content.full}`} aria-labelledby="where">
         <header className={content.sectionHead}>
           <div>
             <h2 id="where" className={content.h2}>
@@ -239,7 +239,7 @@ export default function HelpPage() {
             <p className={content.sectionLead}>Pick a question to see the answer lit up on a replica of the workspace. The replica works, so you can try it straight away.</p>
           </div>
         </header>
-        <Walkthrough kind="text" steps={FINDER} label="Question" />
+        <Walkthrough kind="text" steps={FINDER} label="Question" wide />
       </section>
 
       <section id="shortcuts" className={content.band} aria-labelledby="keys">

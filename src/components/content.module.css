@@ -67,6 +67,11 @@
   background: var(--surface);
 }
 
+/* A band as wide as the page (with a margin), for what needs the room. */
+.full {
+  padding-inline: max(16px, 2.5vw);
+}
+
 .sectionHead {
   display: flex;
   flex-wrap: wrap;

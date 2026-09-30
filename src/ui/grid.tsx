@@ -191,16 +191,16 @@ const RowView = memo(
     p.selected === q.selected,
 );
 
-/** The arrows either side of the ruler that copy a row across. */
+/** The arrows either side of the ruler that copy a row across: each beside its document, sending its version to the other. */
 function Arrows({ act, rowKey, onCopy }: { act: Act; rowKey: string; onCopy: GridProps['onCopy'] }) {
   const [toA, toB] = actLabels(act);
   return (
     <>
-      <button type="button" className="act to-a" data-act="r2l" data-key={rowKey} data-sub={act.sub} data-tip={toA} aria-label={toA} onClick={() => onCopy(rowKey, 'r2l', act.sub)}>
-        <Ico name="chevronsLeft" />
-      </button>
       <button type="button" className="act to-b" data-act="l2r" data-key={rowKey} data-sub={act.sub} data-tip={toB} aria-label={toB} onClick={() => onCopy(rowKey, 'l2r', act.sub)}>
         <Ico name="chevronsRight" />
+      </button>
+      <button type="button" className="act to-a" data-act="r2l" data-key={rowKey} data-sub={act.sub} data-tip={toA} aria-label={toA} onClick={() => onCopy(rowKey, 'r2l', act.sub)}>
+        <Ico name="chevronsLeft" />
       </button>
     </>
   );

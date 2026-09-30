@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Pixels } from '../../src/image/diff';
-import { changedBoxes, diffImage, diffPixels, fingerprint, fingerprintDistance } from '../../src/image/diff';
+import { changedBoxes, diffImage, diffPixels, fingerprint, fingerprintDistance, lookOf, sameLook, shrinkPixels } from '../../src/image/diff';
 
 /** A picture filled with one colour, with rectangles of other colours painted on. */
 function picture(w: number, h: number, bg: [number, number, number], rects: Array<[number, number, number, number, [number, number, number]]> = []): Pixels {
@@ -63,6 +63,33 @@ describe('image comparison', () => {
     const img = diffImage(b, diffPixels(a, b));
     expect([...img.slice(4, 8)]).toEqual([220, 38, 38, 255]);
     expect([...img.slice(0, 4)]).toEqual([255, 255, 255, 255]);
+  });
+
+  it('knows a picture again by how it looks: resized or saved again, it is the same; changed in any way that shows, it is not', () => {
+    const look = lookOf(scene(320, 200));
+    // Resized by another program (to half, and to an awkward size), and saved again with a little noise.
+    expect(sameLook(look, lookOf(shrinkPixels(scene(320, 200), 160, 100)))).toBe(true);
+    expect(sameLook(look, lookOf(shrinkPixels(scene(320, 200), 213, 133)))).toBe(true);
+    expect(sameLook(look, lookOf(scene(320, 200, 1)))).toBe(true);
+    // A logo in another colour, though its shape (and so its fingerprint) is the same.
+    const logo = (c: [number, number, number]) => lookOf(picture(2, 2, c));
+    expect(fingerprintDistance(logo(red).print, logo([0, 0, 200]).print)).toBe(0);
+    expect(sameLook(logo(red), logo([0, 0, 200]))).toBe(false);
+    // A bar of a chart grown, and a small label added.
+    const blue: [number, number, number] = [30, 90, 200];
+    const chart = (bar: number, label = false) =>
+      lookOf(
+        picture(640, 400, white, [
+          [100, 400 - 200, 60, 200, blue],
+          [400, 400 - bar, 60, bar, blue],
+          ...(label ? [[480, 40, 90, 14, [20, 20, 20]] as [number, number, number, number, [number, number, number]]] : []),
+        ]),
+      );
+    expect(sameLook(chart(250), chart(250))).toBe(true);
+    expect(sameLook(chart(250), chart(300))).toBe(false);
+    expect(sameLook(chart(250), chart(250, true))).toBe(false);
+    // The same drawing in other proportions is another picture.
+    expect(sameLook(look, lookOf(scene(320, 320)))).toBe(false);
   });
 
   it('knows a picture again after it is resized or saved again, and tells different ones apart', () => {

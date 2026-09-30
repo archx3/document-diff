@@ -73,7 +73,7 @@ const STEPS: Step[] = [
     body: (
       <>
         <p>
-          <b>Transcribe</b> runs a speech model on this device and compares the two transcripts word by word. Click any word to play from there.
+          <b>Transcribe</b> runs a speech model on this device and compares the two transcripts word by word. Click any word to play from there. Started by mistake? Stop it with the × beside it, or press Esc.
         </p>
         <p>Nothing is sent anywhere. The model is about 41 MB and is downloaded once, then kept by the browser.</p>
       </>

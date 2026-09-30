@@ -99,6 +99,8 @@ export interface AudioCompare {
    * transcribed again, unless `again`.
    */
   runTranscript(where?: TranscribeWhere, again?: boolean): void;
+  /** Stops the transcription under way (what was shown before comes back). */
+  stopTranscript(): void;
   where: TranscribeWhere;
   setWhere(w: TranscribeWhere): void;
   /** Whether each place can transcribe here. */
@@ -151,6 +153,9 @@ export interface TranscriptKeeper {
   kept: KeptTranscripts | null;
   setKept(update: (k: KeptTranscripts | null) => KeptTranscripts | null): void;
 }
+
+/** Why a transcription is stopped when the recordings change under it. */
+const REPLACED = 'replaced';
 
 const WHERE_KEY = 'collate.transcribe-where';
 const IGNORE_KEY = 'collate.transcript-ignore';
@@ -250,9 +255,13 @@ export function useAudioCompare(docs: { a: Doc; b: Doc } | null, keeper?: Transc
   /** The scrub under way: the recording scrubbed, whether it was playing, and when it was last moved to be heard. */
   const scrub = useRef<{ side: Side; wasPlaying: boolean; heardAt: number; t: number } | null>(null);
   const players = useRef<Record<Side, HTMLAudioElement | null>>({ a: null, b: null });
+  /** The transcription under way, to stop it. */
+  const running = useRef<AbortController | null>(null);
 
   // Decoding.
   useEffect(() => {
+    // A transcription under way was of the recordings before.
+    running.current?.abort(REPLACED);
     setSides(null);
     setFeats(null);
     setError('');
@@ -461,39 +470,61 @@ export function useAudioCompare(docs: { a: Doc; b: Doc } | null, keeper?: Transc
       // A recording transcribed before (the other one was replaced) isn't transcribed again, unless asked.
       const kept = (!again && keep.current?.kept?.byRecording) || {};
       const [keyA, keyB] = [sides.a.obj.key, sides.b.obj.key];
+      const ctl = new AbortController();
+      running.current = ctl;
+      const { signal } = ctl;
+      let ta = kept[keyA] && heardOnly(kept[keyA], sides.a.decoded.duration);
+      let tb = kept[keyB] && heardOnly(kept[keyB], sides.b.decoded.duration);
       void (async () => {
         try {
-          let ta = kept[keyA] && heardOnly(kept[keyA], sides.a.decoded.duration);
-          let tb = kept[keyB] && heardOnly(kept[keyB], sides.b.decoded.duration);
           const ready: Side | undefined = ta ? 'a' : tb ? 'b' : undefined;
           if (w === 'server') {
             // The service transcribes two at once.
             setTranscript({ status: 'working', side: ta ? 'b' : 'a', progress: { stage: 'server' }, ready });
             [ta, tb] = await Promise.all([
-              ta ?? transcribeOnServer(sides.a.decoded.mono).then((t) => heardOnly(t, sides.a.decoded.duration)),
-              tb ?? transcribeOnServer(sides.b.decoded.mono).then((t) => heardOnly(t, sides.b.decoded.duration)),
+              ta ?? transcribeOnServer(sides.a.decoded.mono, undefined, signal).then((t) => (ta = heardOnly(t, sides.a.decoded.duration))),
+              tb ?? transcribeOnServer(sides.b.decoded.mono, undefined, signal).then((t) => (tb = heardOnly(t, sides.b.decoded.duration))),
             ]);
           } else {
             if (!ta) {
               setTranscript({ status: 'working', side: 'a', progress: { stage: 'model', done: 0 }, ready });
-              ta = heardOnly(await transcribe(sides.a.decoded.mono, (progress) => setTranscript({ status: 'working', side: 'a', progress, ready })), sides.a.decoded.duration);
+              const t = await transcribe(sides.a.decoded.mono, (progress) => setTranscript({ status: 'working', side: 'a', progress, ready }), undefined, signal);
+              ta = heardOnly(t, sides.a.decoded.duration);
             }
             if (!tb) {
               setTranscript({ status: 'working', side: 'b', progress: { stage: 'transcribing' }, ready });
-              tb = heardOnly(await transcribe(sides.b.decoded.mono, (progress) => setTranscript({ status: 'working', side: 'b', progress, ready })), sides.b.decoded.duration);
+              const t = await transcribe(sides.b.decoded.mono, (progress) => setTranscript({ status: 'working', side: 'b', progress, ready }), undefined, signal);
+              tb = heardOnly(t, sides.b.decoded.duration);
             }
           }
           setTranscript({ status: 'done', a: ta, b: tb });
           setShown(true);
           // Kept for these two recordings only.
-          keep.current?.setKept(() => ({ byRecording: { [keyA]: ta, [keyB]: tb }, shown: true }));
+          keep.current?.setKept(() => ({ byRecording: { [keyA]: ta!, [keyB]: tb! }, shown: true }));
         } catch (e) {
-          setTranscript({ status: 'error', message: (e as Error).message });
+          if (!signal.aborted) {
+            setTranscript({ status: 'error', message: (e as Error).message });
+            return;
+          }
+          // Stopped: for other recordings, nothing more; for these, what was shown before comes back, and a recording
+          // transcribed before the stop isn't transcribed again next time.
+          if (signal.reason === REPLACED) return;
+          const before = keep.current?.kept?.byRecording ?? {};
+          const pa = before[keyA];
+          const pb = before[keyB];
+          if (pa && pb) setTranscript({ status: 'done', a: heardOnly(pa, sides.a.decoded.duration), b: heardOnly(pb, sides.b.decoded.duration) });
+          else setTranscript({ status: 'idle' });
+          const done = { ...(ta && !pa ? { [keyA]: ta } : {}), ...(tb && !pb ? { [keyB]: tb } : {}) };
+          if (Object.keys(done).length) keep.current?.setKept((k) => ({ byRecording: { ...(k?.byRecording ?? {}), ...done }, shown: k?.shown ?? true }));
+        } finally {
+          if (running.current === ctl) running.current = null;
         }
       })();
     },
     [sides],
   );
+
+  const stopTranscript = useCallback(() => running.current?.abort(), []);
 
   /** Transcribing again (not keeping either transcript), once the reader has said the recordings may be sent. */
   const askedAgain = useRef(false);
@@ -564,6 +595,7 @@ export function useAudioCompare(docs: { a: Doc; b: Doc } | null, keeper?: Transc
     transcriptAvailable: can.device || can.server,
     transcript,
     runTranscript,
+    stopTranscript,
     where,
     setWhere,
     can,

@@ -5,6 +5,11 @@
   gap: 32px;
 }
 
+/* Wider than a band of the usual width (1180px): the steps stay as wide as they would be there, and the replica has all the room besides. */
+.wide {
+  grid-template-columns: minmax(0, calc((min(100%, 1180px) - 32px) * 0.8 / 2.15)) minmax(0, 1fr);
+}
+
 .steps {
   display: grid;
   gap: 8px;

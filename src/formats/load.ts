@@ -32,7 +32,7 @@ function looksLikeHtml(text: string): boolean {
 export { ACCEPTED_EXTENSIONS } from './extensions';
 import { imageMime, readImage } from './image/read';
 import { audioMime, readAudio } from './audio/read';
-import { withFingerprints } from '../image/draw';
+import { withKnownPictures } from '../image/draw';
 
 export type SniffedKind = 'pdf' | 'rtf' | 'cfb' | 'docx' | 'odt' | 'epub' | 'zip' | 'fodt' | 'text';
 
@@ -142,7 +142,7 @@ const UNSUPPORTED: Record<string, string> = {
  * they show (so a picture only resized or saved again is the same picture).
  */
 export async function loadFile(file: Blob & { name: string }): Promise<Doc> {
-  return withFingerprints(await readFile(file));
+  return withKnownPictures(await readFile(file));
 }
 
 async function readFile(file: Blob & { name: string }): Promise<Doc> {
