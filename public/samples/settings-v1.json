@@ -1,0 +1,17 @@
+{
+  "name": "harbor-shop",
+  "region": "eu-west",
+  "checkout": {
+    "currency": "EUR",
+    "taxIncluded": true,
+    "freeShippingOver": 50,
+    "methods": ["card", "paypal"]
+  },
+  "emails": {
+    "sender": "orders@harbor.example",
+    "sendReceipts": true
+  },
+  "cache": {
+    "ttlSeconds": 300
+  }
+}

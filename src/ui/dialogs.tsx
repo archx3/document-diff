@@ -1,12 +1,27 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode, Ref } from 'react';
 import { Ico } from '../components/icons';
+import type { HistoryStep } from '../core/versions';
+import type { ImageSide } from './image/use-image-compare';
+import type { DriveRef, DriveRevision } from '../lib/cloud';
+import { driveRevisions } from '../lib/cloud';
 import { googleDocId } from '../formats/load';
 import type { LoadKind } from './empty';
 import type { Side } from './util';
 import { SIDE_NAME } from './util';
 
-export type DialogState = { type: 'paste'; side: Side } | { type: 'gdoc'; side: Side; presetId?: string } | { type: 'help' };
+export type DialogState =
+  | { type: 'paste'; side: Side }
+  | { type: 'gdoc'; side: Side; presetId?: string }
+  | { type: 'help' }
+  /** One paragraph through every version. */
+  | { type: 'history'; steps: HistoryStep[] }
+  /** A review file locked with a password. */
+  | { type: 'unlock'; name: string; bytes: Uint8Array; error?: string }
+  /** Two versions of a picture, compared. */
+  | { type: 'pictures'; a: ImageSide; b: ImageSide }
+  /** Earlier versions of a Google Drive file, to compare with; the one chosen goes in `side`. */
+  | { type: 'revisions'; side: Side; ref: DriveRef };
 
 interface DialogProps {
   className: string;
@@ -44,6 +59,77 @@ export function Dialog({ className, onClose, children, ref }: DialogProps) {
       </button>
       {children}
     </dialog>
+  );
+}
+
+/** A Drive file's earlier versions: the one chosen is compared with the file as it is now. */
+export function RevisionsDialog({ file, onPick }: { file: DriveRef; onPick(rev: DriveRevision): void }) {
+  const [list, setList] = useState<DriveRevision[] | null>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let live = true;
+    driveRevisions(file).then(
+      (l) => live && setList(l),
+      (e) => live && setError((e as Error).message),
+    );
+    return () => {
+      live = false;
+    };
+  }, [file]);
+  return (
+    <>
+      <h2>Earlier versions of “{file.name}”</h2>
+      <p>Choose a version to compare with the file as it is now.</p>
+      {error && (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      )}
+      {!list && !error && <p className="hint">Getting the versions from Google Drive…</p>}
+      {list && !list.length && <p className="hint">Google Drive has no earlier versions of this file.</p>}
+      {list && list.length > 0 && (
+        <ul className="revisions">
+          {list.map((r, i) => (
+            <li key={r.id}>
+              <button type="button" className="mi" data-revision={r.id} onClick={() => onPick(r)}>
+                <Ico name="undo" />
+                <span>{new Date(r.modified).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                <small>{[i === 0 && 'The latest', r.by].filter(Boolean).join(' · ')}</small>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** The password for a locked review file. */
+export function UnlockDialog({ name, error, onUnlock }: { name: string; error?: string; onUnlock(password: string): void }) {
+  const [password, setPassword] = useState('');
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => input.current?.focus(), []);
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (password) onUnlock(password);
+      }}
+    >
+      <h2>Open “{name}”</h2>
+      <p>This review file is locked. Enter the password it was saved with.</p>
+      <input className="field" type="password" aria-label="Password" data-unlock="password" value={password} ref={input} onChange={(e) => setPassword(e.currentTarget.value)} />
+      {error && (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      )}
+      <div className="dlg-actions">
+        <button type="submit" className="btn primary" data-unlock="open" disabled={!password}>
+          Open
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -214,6 +300,10 @@ export function HelpDialog() {
             <Key keys={['Alt', '←']} plus what="Use B’s version in A" />
             <Key keys={['Ctrl', 'Z']} plus what="Undo" />
             <Key keys={['Ctrl', 'Shift', 'Z']} plus what="Redo" />
+            <Key keys={['A']} what="Accept the change and go to the next" />
+            <Key keys={['X']} what="Reject the change and go to the next" />
+            <Key keys={['R']} what="Review mode: notes, highlights and reactions" />
+            <Key keys={['G']} what="Spelling and grammar" />
             <Key keys={['C']} what="Show changes only" />
             <Key keys={['S']} what="List of changes" />
             <Key keys={['V']} what="Side by side / unified" />
@@ -221,6 +311,22 @@ export function HelpDialog() {
             <Key keys={['M']} what="Minimap" />
             <Key keys={['L']} what="Line numbers" />
             <Key keys={['?']} what="This help" />
+          </dl>
+          <h3>Pictures</h3>
+          <dl className="keys">
+            <Key keys={['1', '2', '3', '4']} what="Side by side, swipe, onion skin, difference" />
+            <Key keys={['N', 'P']} what="Next / previous changed area (zoomed in)" />
+            <Key keys={['+', '−', '0']} what="Zoom in, out, fit" />
+          </dl>
+          <h3>Audio</h3>
+          <dl className="keys">
+            <Key keys={['Space']} what="Play / pause" />
+            <Key keys={['N', 'P']} what="Next / previous difference" />
+            <Key keys={['A', 'B']} what="Listen to A or B, at the same moment" />
+            <Key keys={['L']} what="Loop the difference" />
+            <Key keys={['T']} what="Transcribe, or show the transcripts" />
+            <Key keys={['1', '2', '3']} what="Waveform, spectrogram, loudness" />
+            <Key keys={['←', '→']} what="Back or on 5 seconds" />
           </dl>
           <h3>What is compared</h3>
           <p>

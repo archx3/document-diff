@@ -62,6 +62,24 @@ const PATHS = {
   /** An idea: a light bulb. */
   bulb: '<path d="M8 1.75a4.25 4.25 0 0 0-2.6 7.6c.55.43.85 1.08.85 1.77v.13h3.5v-.13c0-.69.3-1.34.85-1.77A4.25 4.25 0 0 0 8 1.75z"/><path d="M6.25 13h3.5M6.9 14.75h2.2"/>',
   plus: '<path d="M8 3.25v9.5M3.25 8h9.5"/>',
+  minus: '<path d="M3.25 8h9.5"/>',
+  /** Documents, images and audio: what a comparison is of. */
+  image: '<rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5"/><circle cx="5.5" cy="6.25" r="1.25"/><path d="M2 11.5 6 8l3 2.5 2-1.75 3 2.5"/>',
+  audio: '<path d="M2 8h1.5M5 5v6M8 2.5v11M11 5.5v5M14 8h0"/>',
+  /** Playback, drawn filled where a player's controls are (the bar's play button). */
+  play: '<path d="M5 3.25v9.5l7.5-4.75z" fill="currentColor"/>',
+  pause: '<path d="M5 3.5v9M11 3.5v9" stroke-width="2.25"/>',
+  skipBack: '<path d="M4 3.5v9"/><path d="M12.5 3.75v8.5L6 8z" fill="currentColor"/>',
+  skipForward: '<path d="M12 3.5v9"/><path d="M3.5 3.75v8.5L10 8z" fill="currentColor"/>',
+  loop: '<path d="M3.5 7V6a2 2 0 0 1 2-2h7.5M10.5 1.75 13 4l-2.5 2.25"/><path d="M12.5 9v1a2 2 0 0 1-2 2H3M5.5 14.25 3 12l2.5-2.25"/>',
+  volume: '<path d="M2.5 6v4h2.5l3.5 3V3L5 6z" fill="currentColor"/><path d="M10.75 5.5a3.5 3.5 0 0 1 0 5M12.5 3.75a6 6 0 0 1 0 8.5"/>',
+  mute: '<path d="M2.5 6v4h2.5l3.5 3V3L5 6z" fill="currentColor"/><path d="M11 6l3.5 4M14.5 6 11 10"/>',
+  /** A transcript: a note and lines of words, as a player shows its lyrics. */
+  transcript: '<path d="M6 11.5V3.25l6-1.25v8.25"/><circle cx="4.5" cy="11.5" r="1.5"/><circle cx="10.5" cy="10.25" r="1.5"/>',
+  /** Hearing the sound while scrubbing: a playhead through a waveform. */
+  scrub: '<path d="M2 8h.5M4 6.5v3M6 5v6M10.5 5.5v5M12.5 6.75v2.5M14.5 8h0"/><path d="M8.25 1.75v12.5" stroke-width="1.9"/>',
+  /** Listening to the other version: A and B trading places. */
+  abSwitch: '<path d="M2.5 5h8.5l-2-2M13.5 11H5l2 2"/>',
   trash: '<path d="M2.75 4.25h10.5M6.25 4.25V2.75h3.5v1.5M4.25 4.25l.6 9.25h6.3l.6-9.25"/><path d="M6.6 7v4M9.4 7v4"/>',
   edit: '<path d="M10.5 2.75 13.25 5.5 6 12.75H3.25V10z"/><path d="M9 4.25 11.75 7"/>',
   /** Review mode: a page with a note in its margin. */

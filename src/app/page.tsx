@@ -81,11 +81,13 @@ export default function Home() {
         <nav className={site.nav} aria-label="Sections">
           <a href="#features">Features</a>
           <a href="#how">How it works</a>
-          <a href="#formats">Formats</a>
+          <Link href="/samples/">Samples</Link>
+          <Link href="/guides/">Guides</Link>
+          <Link href="/help/">Help</Link>
         </nav>
         <div className={site.actions}>
-          <Link href="/compare/sample/" className={`${site.pill} ${site.quiet} ${site.small} ${site.hideNarrow}`}>
-            See a sample
+          <Link href="/samples/" className={`${site.pill} ${site.quiet} ${site.small} ${site.hideNarrow}`}>
+            See the samples
           </Link>
           <Link href="/compare/new/" className={`${site.pill} ${site.primary} ${site.small}`}>
             Start comparing
@@ -117,8 +119,8 @@ export default function Home() {
           </div>
           <p className={styles.alt}>
             No file to hand?{' '}
-            <Link href="/compare/sample/" className={site.textLink}>
-              See a sample comparison
+            <Link href="/samples/" className={site.textLink}>
+              Try a sample document, image or recording
               <Icon name="arrow" className={site.arrow} />
             </Link>
           </p>
@@ -273,7 +275,7 @@ export default function Home() {
             </StartButton>
           </div>
           <p className={styles.finalLink}>
-            <Link href="/compare/sample/">or see a sample comparison first</Link>
+            <Link href="/samples/">or try one of the samples first</Link>
           </p>
         </section>
       </main>

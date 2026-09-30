@@ -60,6 +60,8 @@ const KEEP = 8;
 /* ------------------------------------------------------------- storage */
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
+/** The database once it is open, for writes that can't wait for a promise (as the page unloads). */
+let openedDb: IDBDatabase | null = null;
 
 function openDb(): Promise<IDBDatabase | null> {
   dbPromise ??= new Promise((resolve) => {
@@ -67,7 +69,7 @@ function openDb(): Promise<IDBDatabase | null> {
       if (typeof indexedDB === 'undefined') return resolve(null);
       const req = indexedDB.open(DB_NAME, 1);
       req.onupgradeneeded = () => req.result.createObjectStore(STORE);
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => resolve((openedDb = req.result));
       req.onerror = () => resolve(null);
       req.onblocked = () => resolve(null);
     } catch {
@@ -78,11 +80,18 @@ function openDb(): Promise<IDBDatabase | null> {
   return dbPromise;
 }
 
+/**
+ * One request, in a transaction of its own that is committed as soon as it is
+ * made. Left to commit itself, a transaction waits for its request to come
+ * back first, and a page that is being unloaded is gone before then: the
+ * write is lost.
+ */
 function request<T>(db: IDBDatabase, mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T | undefined> {
   return new Promise((resolve) => {
     try {
       const tx = db.transaction(STORE, mode);
       const req = run(tx.objectStore(STORE));
+      tx.commit?.();
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => resolve(undefined);
     } catch {
@@ -322,15 +331,19 @@ export class SessionWriter {
         console.error('The session could not be saved', err);
       }
     }
-    this.chain = this.chain.then(async () => {
+    // Written now, not after a promise or the write before: when the page is
+    // being unloaded there is no later. (The database keeps writes in the order they were made.)
+    const write = (db: IDBDatabase) =>
+      Promise.all([
+        saved && put(db, docsKey(scope, tab), { docs: saved } satisfies DocsRecord),
+        view && put(db, viewKey(scope, tab), view),
+        extra && put(db, extraKey(scope, tab), extra),
+      ]);
+    const written = openedDb ? write(openedDb) : openDb().then((db) => db && write(db));
+    // The list of sessions can wait: the next load of this one lists it again.
+    this.chain = Promise.all([this.chain, written]).then(async () => {
       const db = await openDb();
-      if (!db) return;
-      if (saved) {
-        await put(db, docsKey(scope, tab), { docs: saved } satisfies DocsRecord);
-        await touch(db, scope, tab);
-      }
-      if (view) await put(db, viewKey(scope, tab), view);
-      if (extra) await put(db, extraKey(scope, tab), extra);
+      if (db && saved) await touch(db, scope, tab);
     });
     return this.chain;
   }

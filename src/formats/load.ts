@@ -30,6 +30,9 @@ function looksLikeHtml(text: string): boolean {
 }
 
 export { ACCEPTED_EXTENSIONS } from './extensions';
+import { imageMime, readImage } from './image/read';
+import { audioMime, readAudio } from './audio/read';
+import { withFingerprints } from '../image/draw';
 
 export type SniffedKind = 'pdf' | 'rtf' | 'cfb' | 'docx' | 'odt' | 'epub' | 'zip' | 'fodt' | 'text';
 
@@ -134,8 +137,15 @@ const UNSUPPORTED: Record<string, string> = {
   oxps: 'an XPS document. Print it to PDF, then load that file.',
 };
 
-/** Reads a user-supplied file into a document. */
+/**
+ * Reads a user-supplied file into a document, its pictures known by what
+ * they show (so a picture only resized or saved again is the same picture).
+ */
 export async function loadFile(file: Blob & { name: string }): Promise<Doc> {
+  return withFingerprints(await readFile(file));
+}
+
+async function readFile(file: Blob & { name: string }): Promise<Doc> {
   const name = file.name || 'Untitled';
   const ext = extension(name);
   if (ext === 'gdoc') {
@@ -150,6 +160,10 @@ export async function loadFile(file: Blob & { name: string }): Promise<Doc> {
   }
   if (UNSUPPORTED[ext]) throw new LoadError(`"${name}" is ${UNSUPPORTED[ext]}`);
   const bytes = new Uint8Array(await file.arrayBuffer());
+  const picture = imageMime(bytes, ext);
+  if (picture) return readImage(bytes, name, picture);
+  const sound = audioMime(bytes, ext);
+  if (sound) return readAudio(bytes, name, sound);
   const { kind, detail } = sniff(bytes, ext);
   switch (kind) {
     case 'pdf': {

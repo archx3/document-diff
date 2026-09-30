@@ -114,7 +114,7 @@ function importBlockElement(block: Block, ctx: MergeContext, pkg: DocxPackage): 
 }
 
 /** Model spans for pieces of a paragraph that has no DOCX backing. */
-function slicedSpans(block: ParaBlock, pieces: SplicePiece[]): Span[] {
+export function slicedSpans(block: ParaBlock, pieces: readonly Pick<SplicePiece, 'span' | 'start' | 'end'>[]): Span[] {
   const out: Span[] = [];
   for (const p of pieces) {
     const s = block.spans[p.span];

@@ -36,6 +36,10 @@ export function kindLabel(doc: Doc): string {
       return 'CSV';
     case 'sample':
       return 'Sample';
+    case 'image':
+      return 'Picture';
+    case 'audio':
+      return 'Audio';
   }
 }
 
@@ -71,6 +75,7 @@ export function sameText(o: CompareOptions): string {
     o.ignoreCase && 'letter case',
     o.ignoreWhitespace && 'extra spaces',
     o.normalizePunctuation && 'quote and dash styles',
+    o.ignorePunctuation && 'punctuation',
   ].filter((x): x is string => !!x);
   return ignored.length ? `A and B match, ignoring ${listText(ignored)}` : 'A and B are identical';
 }

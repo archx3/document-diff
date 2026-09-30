@@ -5,11 +5,16 @@
  * into the documents.
  */
 import type { Comparison } from '../core/compare';
+import type { RedNote } from '../core/redline';
 import type { Block } from '../core/model';
 import type { ChangeTarget, Segment, Side, Stream, TextTarget } from './anchor';
 import { docStream, findChange, findText, segments } from './anchor';
 
 export type Reaction = 'up' | 'down' | 'idea';
+
+/** The reader's decision on a change (a change without one is open). */
+export type Decision = 'accepted' | 'rejected';
+export const DECISIONS: readonly Decision[] = ['accepted', 'rejected'];
 export const REACTIONS: readonly Reaction[] = ['up', 'down', 'idea'];
 
 export const HIGHLIGHT_COLORS = ['yellow', 'green', 'blue', 'pink'] as const;
@@ -22,6 +27,8 @@ interface MarkBase {
   target: Target;
   created: number;
   updated?: number;
+  /** Who made it (the name the reader gave, if any). */
+  author?: string;
 }
 
 export interface NoteMark extends MarkBase {
@@ -41,7 +48,13 @@ export interface ReactionMark extends MarkBase {
   reaction: Reaction;
 }
 
-export type Mark = NoteMark | HighlightMark | ReactionMark;
+export interface StatusMark extends MarkBase {
+  kind: 'status';
+  target: ChangeTarget;
+  status: Decision;
+}
+
+export type Mark = NoteMark | HighlightMark | ReactionMark | StatusMark;
 
 let seq = 0;
 export function markId(): string {
@@ -140,7 +153,7 @@ export function margins(placed: readonly Placed[]): Map<string, MarginInfo> {
       if (mark.kind === 'note') info.notes++;
       else if (mark.kind === 'highlight') {
         if (!info.highlights.includes(mark.color)) info.highlights.push(mark.color);
-      } else if (!info.reactions.includes(mark.reaction)) info.reactions.push(mark.reaction);
+      } else if (mark.kind === 'reaction' && !info.reactions.includes(mark.reaction)) info.reactions.push(mark.reaction);
     }
   }
   for (const info of m.values()) info.reactions.sort((x, y) => REACTIONS.indexOf(x) - REACTIONS.indexOf(y));
@@ -155,11 +168,29 @@ export function marginSig(info: MarginInfo | undefined): string {
 /* ------------------------------------------------------------- changing */
 
 /** The reactions on a change: thumbs up and down exclude each other, an idea goes with either. */
-export function toggleReaction(marks: readonly Mark[], target: ChangeTarget, hunk: number, cmp: Comparison, reaction: Reaction): Mark[] {
+export function toggleReaction(marks: readonly Mark[], target: ChangeTarget, hunk: number, cmp: Comparison, reaction: Reaction, author?: string): Mark[] {
   const on = (m: Mark): m is ReactionMark => m.kind === 'reaction' && findChange(cmp, m.target) === hunk;
   const had = marks.some((m) => on(m) && m.reaction === reaction);
   const out = marks.filter((m) => !(on(m) && (m.reaction === reaction || (reaction !== 'idea' && m.reaction !== 'idea'))));
-  if (!had) out.push({ id: markId(), kind: 'reaction', target, reaction, created: Date.now() });
+  if (!had) out.push({ id: markId(), kind: 'reaction', target, reaction, created: Date.now(), author });
+  return out;
+}
+
+/** Sets (or with null, clears) the decision on a change. */
+export function setDecision(marks: readonly Mark[], target: ChangeTarget, hunk: number, cmp: Comparison, status: Decision | null, author?: string): Mark[] {
+  const out = marks.filter((m) => !(m.kind === 'status' && findChange(cmp, m.target) === hunk));
+  if (status) out.push({ id: markId(), kind: 'status', target, status, created: Date.now(), author });
+  return out;
+}
+
+/** The decision on each change that has one. */
+export function decisions(marks: readonly Mark[], cmp: Comparison): Map<number, Decision> {
+  const out = new Map<number, Decision>();
+  for (const m of marks) {
+    if (m.kind !== 'status') continue;
+    const h = findChange(cmp, m.target);
+    if (h >= 0) out.set(h, m.status);
+  }
   return out;
 }
 
@@ -195,12 +226,48 @@ export function readMarks(raw: unknown): Mark[] {
     const o = r as Record<string, unknown>;
     const target = readTarget(o.target);
     if (!target || !isStr(o.id) || typeof o.created !== 'number') continue;
-    const base = { id: o.id, created: o.created, updated: typeof o.updated === 'number' ? o.updated : undefined };
+    const base = { id: o.id, created: o.created, updated: typeof o.updated === 'number' ? o.updated : undefined, author: isStr(o.author) && o.author ? o.author : undefined };
     if (o.kind === 'note' && isStr(o.text)) out.push({ ...base, kind: 'note', target, text: o.text });
     else if (o.kind === 'highlight' && target.type === 'text' && HIGHLIGHT_COLORS.includes(o.color as HighlightColor))
       out.push({ ...base, kind: 'highlight', target, color: o.color as HighlightColor });
     else if (o.kind === 'reaction' && target.type === 'change' && REACTIONS.includes(o.reaction as Reaction))
       out.push({ ...base, kind: 'reaction', target, reaction: o.reaction as Reaction });
+    else if (o.kind === 'status' && target.type === 'change' && DECISIONS.includes(o.status as Decision))
+      out.push({ ...base, kind: 'status', target, status: o.status as Decision });
+  }
+  return out;
+}
+
+/* -------------------------------------------------------------- redline */
+
+/**
+ * The notes and reactions still found in the comparison, as redline comments:
+ * a note on its words or on its change, and one comment per change naming its
+ * reactions (`names` says them in words).
+ */
+export function redlineNotes(placed: readonly Placed[], names: Readonly<Record<Reaction | Decision, string>>): RedNote[] {
+  const out: RedNote[] = [];
+  const reactions = new Map<number, { list: Array<Reaction | Decision>; date: number }>();
+  for (const p of placed) {
+    const m = p.mark;
+    if (!p.found) continue;
+    if (m.kind === 'note') {
+      const date = m.updated ?? m.created;
+      if (m.target.type === 'change') {
+        if (p.hunk >= 0) out.push({ text: m.text, date, author: m.author, on: { kind: 'change', hunk: p.hunk } });
+      } else if (p.side && p.parts?.length) out.push({ text: m.text, date, author: m.author, quote: m.target.quote, on: { kind: 'text', side: p.side, parts: p.parts } });
+    } else if ((m.kind === 'reaction' || m.kind === 'status') && p.hunk >= 0) {
+      const r = reactions.get(p.hunk) ?? { list: [], date: 0 };
+      r.list.push(m.kind === 'reaction' ? m.reaction : m.status);
+      r.date = Math.max(r.date, m.created);
+      reactions.set(p.hunk, r);
+    }
+  }
+  for (const [hunk, r] of reactions) {
+    // The decision first, then the reactions.
+    const order = [...DECISIONS, ...REACTIONS];
+    const list = [...r.list].sort((x, y) => order.indexOf(x) - order.indexOf(y));
+    out.push({ text: list.map((x) => names[x]).join(', '), date: r.date, on: { kind: 'change', hunk } });
   }
   return out;
 }

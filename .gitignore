@@ -16,3 +16,13 @@ next-env.d.ts
 
 # Spelling dictionaries, generated on install (scripts/build-dictionaries.mjs)
 src/check/dict/*.gen.ts
+
+# Speech model and ONNX Runtime, fetched by `npm run models`
+public/models/
+public/ort/
+
+# Local settings and keys (see .env.local.example)
+.env*.local
+
+# The transcription service's models (npm run server:model)
+server/transcribe/models/

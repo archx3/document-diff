@@ -1,4 +1,5 @@
 import type { Doc } from '../core/model';
+import type { MediaKind } from '../media/kinds';
 
 /**
  * Carries what the reader picked from one page to the next: the file dropped
@@ -8,11 +9,20 @@ import type { Doc } from '../core/model';
  */
 
 let files: File[] = [];
+let kind: MediaKind | null = null;
 let docs: { a: Doc; b: Doc } | null = null;
 
-/** Files chosen on the landing page, for the page that asks for the other version. */
-export function handOffFiles(chosen: File[]): void {
+/** Files chosen on the landing page (and what kind of thing they are), for the page that asks for the other version. */
+export function handOffFiles(chosen: File[], chosenKind?: MediaKind): void {
   files = chosen.slice(0, 2);
+  kind = chosenKind ?? null;
+}
+
+/** The kind chosen with the files handed over, if one was. */
+export function takeKind(): MediaKind | null {
+  const out = kind;
+  kind = null;
+  return out;
 }
 
 export function takeFiles(): File[] {

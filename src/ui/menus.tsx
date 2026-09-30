@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Ico } from '../components/icons';
 import type { Dir } from '../core/merge';
@@ -6,7 +6,13 @@ import type { Doc } from '../core/model';
 import type { CompareOptions } from '../core/tokens';
 import type { ExportFormat } from '../formats/export';
 import { VIEWER_EXTENSIONS, exportFormats } from '../formats/export';
+import type { CloudKind } from '../lib/cloud';
+import { CLOUD_NAME } from '../lib/cloud';
 import type { LoadKind } from './empty';
+import { KindPicker } from '../components/kind-picker';
+import { Segmented } from '../components/ui/segmented';
+import type { MediaKind } from '../media/kinds';
+import { MEDIA } from '../media/kinds';
 import { hostedInViewer, inViewer } from './files';
 import type { Side } from './util';
 import { SIDE_NAME, plural } from './util';
@@ -58,22 +64,54 @@ export function Popover({ anchor, className = '', onClose, children }: PopoverPr
   );
 }
 
-export function LoadMenu({ side, onLoad }: { side: Side; onLoad(kind: LoadKind, side: Side): void }) {
+interface LoadMenuProps {
+  side: Side;
+  /** Cloud drives this site is set up for. */
+  clouds?: readonly CloudKind[];
+  /** The document here came from Google Drive: its earlier versions can be compared. */
+  driveFile?: string;
+  onLoad(kind: LoadKind, side: Side): void;
+  /** What kind of file to open, chosen first: it sets which files the dialog offers, and which other ways fit. */
+  media: MediaKind;
+  onMedia(k: MediaKind): void;
+}
+
+export function LoadMenu({ side, clouds = [], driveFile, onLoad, media, onMedia }: LoadMenuProps) {
   return (
-    <div className="menu" role="menu" aria-label={`Load ${SIDE_NAME[side]}`}>
+    <div className="menu load-menu" role="menu" aria-label={`Load ${SIDE_NAME[side]}`}>
+      <div className="load-kinds">
+        <KindPicker value={media} onChange={onMedia} />
+      </div>
       <button type="button" className="mi" role="menuitem" data-load="file" data-side={side} onClick={() => onLoad('file', side)}>
         <Ico name="open" />
-        <span>Open a file…</span>
-        <small>Word, PDF, OpenDocument, RTF, EPUB, HTML, Markdown, CSV, text</small>
+        <span>Open one or two files…</span>
+        <small>{MEDIA[media].formats}. Two files replace both A and B.</small>
       </button>
-      <button type="button" className="mi" role="menuitem" data-load="paste" data-side={side} onClick={() => onLoad('paste', side)}>
-        <Ico name="paste" />
-        <span>Paste from Google Docs or Word…</span>
-      </button>
-      <button type="button" className="mi" role="menuitem" data-load="gdoc" data-side={side} onClick={() => onLoad('gdoc', side)}>
-        <Ico name="link" />
-        <span>Google Docs link…</span>
-      </button>
+      {media === 'text' && (
+        <>
+          <button type="button" className="mi" role="menuitem" data-load="paste" data-side={side} onClick={() => onLoad('paste', side)}>
+            <Ico name="paste" />
+            <span>Paste from Google Docs or Word…</span>
+          </button>
+          <button type="button" className="mi" role="menuitem" data-load="gdoc" data-side={side} onClick={() => onLoad('gdoc', side)}>
+            <Ico name="link" />
+            <span>Google Docs link…</span>
+          </button>
+        </>
+      )}
+      {clouds.map((c) => (
+        <button key={c} type="button" className="mi" role="menuitem" data-load={c} data-side={side} onClick={() => onLoad(c, side)}>
+          <Ico name="open" />
+          <span>From {CLOUD_NAME[c]}…</span>
+        </button>
+      ))}
+      {driveFile && (
+        <button type="button" className="mi" role="menuitem" data-load="drive-version" data-side={side} onClick={() => onLoad('drive-version', side)}>
+          <Ico name="undo" />
+          <span>Compare with an earlier version…</span>
+          <small>Of “{driveFile}” on Google Drive</small>
+        </button>
+      )}
     </div>
   );
 }
@@ -217,6 +255,140 @@ export function InlineMenu({ a, b, fmtOnly, onApply }: { a: string; b: string; f
       <button type="button" className="mi" data-inline="r2l" onClick={() => onApply('r2l')}>
         <Ico name="toA" />
         <span>Use B’s wording in A</span>
+      </button>
+    </div>
+  );
+}
+
+interface RedlineMenuProps {
+  /** Names of A and B. */
+  a: string;
+  b: string;
+  author: string;
+  changes: number;
+  /** Notes and reactions that can go in as comments, and whether they will. */
+  notes: number;
+  withNotes: boolean;
+  onAuthor(name: string): void;
+  onWithNotes(on: boolean): void;
+  onDownload(format: 'docx' | 'pdf'): void;
+}
+
+/** The redline's options: whose name goes on the changes, and the download. */
+export function RedlineMenu({ a, b, author, changes, notes, withNotes, onAuthor, onWithNotes, onDownload }: RedlineMenuProps) {
+  return (
+    <div className="menu redline-menu" role="dialog" aria-label="Download redline">
+      <div className="menu-title">Redline</div>
+      <p className="menu-note">
+        A Word file of <b>{b}</b> with {plural(changes, 'change')} from <b>{a}</b> as tracked changes. Accept them all to get B, reject them all to get A.
+      </p>
+      <label className="rl-field">
+        <span>Your name on the changes</span>
+        <input type="text" value={author} placeholder="Collate" data-autofocus maxLength={80} onChange={(e) => onAuthor(e.currentTarget.value)} onKeyDown={(e) => e.key === 'Enter' && onDownload('docx')} />
+      </label>
+      {notes > 0 && (
+        <label className="rl-check">
+          <input type="checkbox" data-redline="notes" checked={withNotes} onChange={(e) => onWithNotes(e.currentTarget.checked)} />
+          <span>Include my notes, reactions and decisions as comments ({notes})</span>
+        </label>
+      )}
+      <button type="button" className="btn primary rl-download" data-redline="download" onClick={() => onDownload('docx')}>
+        <Ico name="download" />
+        <span>Download redline (.docx)</span>
+      </button>
+      <button type="button" className="mi" role="menuitem" data-redline="pdf" onClick={() => onDownload('pdf')}>
+        <Ico name="print" />
+        <span>As a PDF instead</span>
+        <small>For reading and printing: added text in green, removed text struck through in red</small>
+      </button>
+    </div>
+  );
+}
+
+export interface ReportChoices {
+  format: 'pdf' | 'docx';
+  openOnly: boolean;
+  notedOnly: boolean;
+  context: boolean;
+  summary: boolean;
+}
+
+interface ReportMenuProps {
+  choices: ReportChoices;
+  /** A summary of what matters is there to include. */
+  hasSummary: boolean;
+  onChange(c: ReportChoices): void;
+  onDownload(): void;
+}
+
+/** The change report's options and its download. */
+export function ReportMenu({ choices: c, hasSummary, onChange, onDownload }: ReportMenuProps) {
+  const check = (key: 'openOnly' | 'notedOnly' | 'context' | 'summary', text: string) => (
+    <label className="rl-check">
+      <input type="checkbox" data-report={key} checked={c[key]} onChange={(e) => onChange({ ...c, [key]: e.currentTarget.checked })} />
+      <span>{text}</span>
+    </label>
+  );
+  return (
+    <div className="menu report-menu" role="dialog" aria-label="Change report">
+      <div className="menu-title">Change report</div>
+      <p className="menu-note">Every change with its words before and after, your decision, reactions and notes, and a table of them all.</p>
+      <Segmented
+        className="text rp-format"
+        label="Format"
+        value={c.format}
+        onChange={(format) => onChange({ ...c, format })}
+        segments={(['pdf', 'docx'] as const).map((f) => ({ value: f, content: f === 'pdf' ? 'PDF' : 'Word', attrs: { 'data-format': f } }))}
+      />
+      {check('openOnly', 'Only open changes (no decision yet)')}
+      {check('notedOnly', 'Only changes with notes or reactions')}
+      {check('context', 'Show the paragraph before and after each change')}
+      {hasSummary && check('summary', 'Include Claude’s summary of what matters')}
+      <button type="button" className="btn primary rl-download" data-report="download" onClick={onDownload}>
+        <Ico name="download" />
+        <span>Download report</span>
+      </button>
+    </div>
+  );
+}
+
+interface ShareMenuProps {
+  /** There is a comparison to save. */
+  canSave: boolean;
+  author: string;
+  onAuthor(name: string): void;
+  onSave(password: string): void;
+  onOpen(): void;
+}
+
+/** Sharing a review: the comparison and its review as one file, locked with a password if wished; or opening one. */
+export function ShareMenu({ canSave, author, onAuthor, onSave, onOpen }: ShareMenuProps) {
+  const [password, setPassword] = useState('');
+  return (
+    <div className="menu share-menu" role="dialog" aria-label="Share the review">
+      <div className="menu-title">Share the review</div>
+      <p className="menu-note">
+        A review file holds both documents and your notes, highlights, reactions and decisions. Send it to anyone with Collate: they open it here and carry on.
+      </p>
+      {canSave && (
+        <>
+          <label className="rl-field">
+            <span>Your name on your notes</span>
+            <input type="text" value={author} placeholder="Anonymous" maxLength={80} onChange={(e) => onAuthor(e.currentTarget.value)} />
+          </label>
+          <label className="rl-field">
+            <span>Password (optional)</span>
+            <input type="password" data-share="password" value={password} autoComplete="new-password" placeholder="Lock the file with a password" onChange={(e) => setPassword(e.currentTarget.value)} />
+          </label>
+          <button type="button" className="btn primary rl-download" data-share="save" data-autofocus onClick={() => onSave(password)}>
+            <Ico name="download" />
+            <span>{password ? 'Save locked review file' : 'Save review file'}</span>
+          </button>
+        </>
+      )}
+      <button type="button" className="mi" role="menuitem" data-share="open" onClick={onOpen}>
+        <Ico name="open" />
+        <span>Open a review file…</span>
       </button>
     </div>
   );

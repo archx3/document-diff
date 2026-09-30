@@ -21,6 +21,26 @@ describe('tokenizer', () => {
     expect(t.tokens.map((x) => x.text)).toEqual(["Don't", ' ', 'stop', '—', 'now', ',', ' ', 'please', '.']);
   });
 
+  it('leaves punctuation out when asked, showing it with its word', () => {
+    const P2 = { ...O, ignorePunctuation: true };
+    const t = tokenizeSpans([S('“Well, 9% of it—ok.')], P2);
+    expect(t.tokens.map((x) => x.text)).toEqual(['“Well,', ' ', '9', '%', ' ', 'of', ' ', 'it—', 'ok.']);
+    expect(t.tokens.map((x) => x.key.split('\u0000')[0])).toEqual(['Well', ' ', '9', '%', ' ', 'of', ' ', 'it', 'ok']);
+    // Every character is still shown, from the spans it came from.
+    expect(t.tokens.flatMap((x) => x.pieces).reduce((n, p) => n + p.end - p.start, 0)).toBe('“Well, 9% of it—ok.'.length);
+  });
+
+  it('compares transcripts without their guessed punctuation, but not without their symbols', () => {
+    const P2 = { ...O, ignorePunctuation: true };
+    const same = (a: string, b: string, o = P2) => compareDocs(doc([P(a)]), doc([P(b)]), o).hunks.length === 0;
+    expect(same('Revenue grew this quarter.', 'Revenue grew this quarter,')).toBe(true);
+    expect(same('Welcome to the Review, revenue grew', 'Welcome to the Review revenue grew')).toBe(true);
+    expect(same('“Thanks” (all).', 'Thanks all')).toBe(true);
+    expect(same('...', '!')).toBe(true);
+    expect(same('grew by 9%', 'grew by 9')).toBe(false);
+    expect(same('Revenue grew this quarter.', 'Revenue grew this quarter,', O)).toBe(false);
+  });
+
   it('keeps words that cross span boundaries together', () => {
     const t = tokenizeSpans([S('Hel', { b: true }), S('lo world')], O);
     expect(t.tokens.map((x) => x.text)).toEqual(['Hello', ' ', 'world']);

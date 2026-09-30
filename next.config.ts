@@ -1,12 +1,12 @@
 import type { NextConfig } from 'next';
 
-// GitHub Pages serves the site from /<repository>/; the Pages workflow passes that path in.
-const basePath = process.env.PAGES_BASE_PATH || undefined;
+// Served from a sub-path (such as /collate/) when BASE_PATH says so.
+const basePath = process.env.BASE_PATH || undefined;
 
 const config: NextConfig = {
-  // A static site: documents are read, compared and written entirely in the browser.
-  output: 'export',
-  // Every page is a folder with an index.html, which any static host serves.
+  // Pages are pre-rendered where they can be (documents are still read, compared and written in the
+  // browser); the API routes (transcription) run on the server.
+  // Every page's URL ends in a slash, as links and bookmarks already have them.
   trailingSlash: true,
   basePath,
   env: {

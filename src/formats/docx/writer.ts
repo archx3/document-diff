@@ -223,15 +223,18 @@ const WORD_HIGHLIGHTS = new Set([
   'black',
 ]);
 
-function rPrFor(doc: Document, fmt: Fmt, pkg: DocxPackage, linkStyle: boolean): Element | null {
+/** Run properties for model formatting (null when there is none). */
+export function rPrFor(doc: Document, fmt: Fmt, pkg: DocxPackage, linkStyle: boolean): Element | null {
   const rPr = createW(doc, 'rPr');
   if (linkStyle) rPr.appendChild(createW(doc, 'rStyle', { val: hyperlinkStyle(pkg) }));
   if (fmt.code) rPr.appendChild(createW(doc, 'rFonts', { ascii: 'Courier New', hAnsi: 'Courier New', cs: 'Courier New' }));
   if (fmt.b) rPr.appendChild(createW(doc, 'b'));
   if (fmt.i) rPr.appendChild(createW(doc, 'i'));
-  if (fmt.s) rPr.appendChild(createW(doc, 'strike'));
+  if (fmt.s || fmt.rev === 'del') rPr.appendChild(createW(doc, 'strike'));
+  // A redline's or report's marked words (shown as a word processor shows tracked changes).
+  if (fmt.rev) rPr.appendChild(createW(doc, 'color', { val: fmt.rev === 'ins' ? '1D6B3A' : 'B3261E' }));
   if (fmt.hl && WORD_HIGHLIGHTS.has(fmt.hl)) rPr.appendChild(createW(doc, 'highlight', { val: fmt.hl }));
-  if (fmt.u) rPr.appendChild(createW(doc, 'u', { val: 'single' }));
+  if (fmt.u || fmt.rev === 'ins') rPr.appendChild(createW(doc, 'u', { val: 'single' }));
   if (fmt.sup) rPr.appendChild(createW(doc, 'vertAlign', { val: 'superscript' }));
   else if (fmt.sub) rPr.appendChild(createW(doc, 'vertAlign', { val: 'subscript' }));
   return rPr.firstChild ? rPr : null;

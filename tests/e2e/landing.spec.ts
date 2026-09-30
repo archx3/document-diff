@@ -31,14 +31,16 @@ test('the landing page asks for a file and leads to the sample', async ({ page }
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/See every change,\s*word by word\./);
   await expect(page.getByRole('heading', { name: 'Drop your first document here' })).toBeVisible();
-  await page.getByRole('link', { name: 'See a sample comparison' }).first().click();
+  await page.getByRole('link', { name: 'Try a sample document, image or recording' }).click();
+  await expect(page).toHaveURL(/\/samples\/$/);
+  await page.getByRole('region', { name: 'Documents' }).getByRole('link', { name: 'Open the comparison' }).click();
   await expect(page).toHaveURL(/\/compare\/sample\/$/);
   await expect(page.locator('#counter .vh')).toHaveText('Change 1 of 7');
 });
 
 test('compares a file chosen on the landing page with another of the same kind', async ({ page }) => {
   await page.goto('/');
-  await chooseFile(page, 'Choose a file', 'tests/fixtures/contract-v1.docx');
+  await chooseFile(page, 'Choose one or two files', 'tests/fixtures/contract-v1.docx');
 
   await expect(page).toHaveURL(/\/compare\/new\/$/);
   await expect(page.getByText('Step 2 of 2')).toBeVisible();
@@ -85,7 +87,7 @@ test('two files dropped together go straight to the comparison', async ({ page }
 
 test('explains a first file that cannot be read', async ({ page }) => {
   await page.goto('/');
-  await chooseFile(page, 'Choose a file', 'tests/fixtures/contract-v1-password.pdf');
+  await chooseFile(page, 'Choose one or two files', 'tests/fixtures/contract-v1-password.pdf');
   await expect(page).toHaveURL(/\/compare\/new\/$/);
   await expect(problem(page)).toContainText('password protected');
   await expect(page.getByText('Step 1 of 2')).toBeVisible();
@@ -132,9 +134,41 @@ test('the workspace name leads back to the landing page', async ({ page }) => {
 
 test('the site pages have no horizontal scroll on a phone', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const path of ['/', '/compare/new/']) {
+  for (const path of ['/', '/compare/new/', '/samples/', '/guides/', '/guides/documents/', '/guides/images/', '/guides/audio/', '/help/', '/privacy/']) {
     await page.goto(path);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow, path).toBeLessThanOrEqual(0);
   }
+});
+
+test('the kind of file is chosen first: its files only, one or both at once', async ({ page }) => {
+  await page.goto('/');
+  const picker = page.getByRole('radiogroup', { name: 'What are you comparing?' });
+  await picker.getByRole('radio', { name: /Audio/ }).click();
+  await expect(page.getByRole('heading', { name: 'Drop your first recording here' })).toBeVisible();
+  await expect(page.locator('input[type="file"]').first()).toHaveAttribute('accept', /\.mp3.*\.wav/);
+  await expect(page.locator('input[type="file"]').first()).toHaveAttribute('multiple', '');
+  // Two recordings at once: straight to the comparison.
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Choose one or two files' }).click();
+  await (await chooser).setFiles(['tests/fixtures/speech-v1.wav', 'tests/fixtures/speech-v2.m4a']);
+  await expect(page).toHaveURL(/\/compare\/$/);
+  await expect(page.locator('.slot-name')).toHaveText(['speech-v1.wav', 'speech-v2.m4a']);
+  await expect(page.locator('#toolbar')).toHaveAttribute('data-kind', 'audio');
+});
+
+test('the load menu chooses the kind first, and two files replace both sides', async ({ page }) => {
+  await page.goto('/compare/sample/');
+  await expect(page.locator('#counter .vh')).toContainText('of');
+  await page.locator('.slot[data-side="a"] [data-menu="load"]').click();
+  const menu = page.locator('.load-menu');
+  await menu.getByRole('radio', { name: /Images/ }).click();
+  await expect(menu.locator('[data-load="paste"]')).toHaveCount(0);
+  const chooser = page.waitForEvent('filechooser');
+  await menu.locator('[data-load="file"]').click();
+  const fc = await chooser;
+  expect(await page.locator('#file-input').getAttribute('accept')).toContain('.png');
+  await fc.setFiles(['tests/fixtures/out/chart-v1.png', 'tests/fixtures/out/chart-v2.png']);
+  await expect(page.locator('.slot-name')).toHaveText(['chart-v1.png', 'chart-v2.png']);
+  await expect(page.locator('#toolbar')).toHaveAttribute('data-kind', 'image');
 });

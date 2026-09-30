@@ -1,5 +1,7 @@
 import { zipSync } from 'fflate';
+import type { Comparison } from '../core/compare';
 import type { Doc } from '../core/model';
+import type { RedNote } from '../core/redline';
 import { VIEWER_EXTENSIONS, exportFormats } from '../formats/export';
 import { blocksToHtml, docToText } from '../formats/html/write';
 import { copyRich, saveFile, viewerReady } from './files';
@@ -87,4 +89,53 @@ export function printDocument(doc: Doc, title: string, unavailable: () => void):
     cleanup();
     unavailable();
   }, 400);
+}
+
+/** Saves the comparison as a Word redline: B, with every change from A as a tracked change. */
+export async function exportRedline(cmp: Comparison, format: 'docx' | 'pdf', author: string, notes: readonly RedNote[], base: string, ui: ExportUi): Promise<void> {
+  const { toast } = ui;
+  const name = `${base}.${format}`;
+  ui.busy('Making the redline…');
+  try {
+    const signed = notes.map((n) => ({ ...n, author: n.author ?? (author.trim() || undefined) }));
+    let out: Uint8Array;
+    if (format === 'docx') {
+      const { redlineDocx } = await import('../formats/docx/redline');
+      out = redlineDocx(cmp, { author, notes: signed });
+    } else {
+      const [{ redlineDoc }, { exportPdf }] = await Promise.all([import('../core/redline'), import('../formats/pdf/write')]);
+      out = await exportPdf(redlineDoc(cmp, undefined, signed));
+    }
+    const mime = format === 'docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' : 'application/pdf';
+    const res = await saveFile(name, new Blob([out as BlobPart], { type: mime }));
+    if (res === 'saved') toast(format === 'docx' ? `Downloaded “${name}”. Open it in Word to accept or reject each change.` : `Downloaded “${name}”`);
+    else if (res === 'busy') toast('A save is already waiting for your answer.', { error: true });
+    else if (res !== 'declined') toast('The file could not be saved from this page.', { error: true });
+  } catch (err) {
+    console.error(err);
+    toast(`The redline could not be made: ${(err as Error).message}`, { error: true });
+  } finally {
+    ui.busy('');
+  }
+}
+
+/** Saves a report (or any document made here) as PDF or Word. */
+export async function exportMade(doc: Doc, format: 'pdf' | 'docx', ui: ExportUi): Promise<void> {
+  const { toast } = ui;
+  const name = `${doc.name}.${format}`;
+  ui.busy(format === 'pdf' ? 'Making the PDF…' : 'Making the Word file…');
+  try {
+    const out =
+      format === 'pdf' ? await (await import('../formats/pdf/write')).exportPdf(doc) : (await import('../formats/docx/writer')).exportDocx(doc);
+    const mime = format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const res = await saveFile(name, new Blob([out as BlobPart], { type: mime }));
+    if (res === 'saved') toast(`Downloaded “${name}”`);
+    else if (res === 'busy') toast('A save is already waiting for your answer.', { error: true });
+    else if (res !== 'declined') toast('The file could not be saved from this page.', { error: true });
+  } catch (err) {
+    console.error(err);
+    toast(`The file could not be made: ${(err as Error).message}`, { error: true });
+  } finally {
+    ui.busy('');
+  }
 }

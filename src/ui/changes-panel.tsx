@@ -1,7 +1,14 @@
 import { Fragment, memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Ico } from '../components/icons';
 import type { Comparison } from '../core/compare';
-import type { HighlightColor, Reaction } from '../review/marks';
+import type { SummaryPoint } from '../check/summary';
+import type { Move } from '../core/moves';
+import { findMoves } from '../core/moves';
+import type { PicturePair } from './pictures';
+import { hunkPictures } from './pictures';
+import type { Decision, HighlightColor, Reaction } from '../review/marks';
+import type { RiskKind } from '../review/risk';
+import { RISK_NAME } from '../review/risk';
 import type { ChangeSummary, Excerpt } from './changes';
 import { KIND_LABEL, summarizeChange } from './changes';
 import { REACTION_ICON, REACTION_NAME } from './rail';
@@ -30,6 +37,7 @@ export interface PanelMark {
   text?: string;
   color?: HighlightColor;
   created: number;
+  author?: string;
 }
 
 /** Review mode's part of the list: marks on the changes, and every note and highlight. */
@@ -49,14 +57,44 @@ interface PanelProps {
   onClose(): void;
   /** In review mode, the marks. */
   review: PanelReview | null;
+  /** The decision on each change that has one. */
+  decisions: ReadonlyMap<number, Decision>;
+  onDecide(hunk: number, status: Decision): void;
+  /** Makes B what the decisions say (A's text back where a change was rejected). */
+  onApplyDecisions(): void;
+  /** What each change touches. */
+  risks: readonly RiskKind[][];
+  /** Claude's summary: its points (null until asked), whether Claude can be asked, and a request under way. */
+  summary: { points: SummaryPoint[] | null; available: boolean; running: boolean };
+  onSummarize(): void;
+  onStopSummary(): void;
 }
 
+export const DECISION_NAME: Record<Decision, string> = { accepted: 'Accepted', rejected: 'Rejected' };
+
 /** The list of changes beside the documents: a card for each change; clicking one goes to it. */
-export function ChangesPanel({ cmp, current, same, onGo, onClose, review }: PanelProps) {
+export function ChangesPanel({ cmp, current, same, onGo, onClose, review, decisions, onDecide, onApplyDecisions, risks, summary, onSummarize, onStopSummary }: PanelProps) {
   const summaries = useMemo(() => cmp.hunks.map((_, i) => summarizeChange(cmp, i)), [cmp]);
+  /** Each change's pictures that differ, for thumbnails. */
+  const pictures = useMemo(() => cmp.hunks.map((_, h) => hunkPictures(cmp, h)), [cmp]);
+  /** Each change's moved paragraphs: where they went, or came from. */
+  const moves = useMemo(() => {
+    const m = new Map<number, Array<{ other: number; dir: 'to' | 'from'; move: Move }>>();
+    const add = (h: number, x: { other: number; dir: 'to' | 'from'; move: Move }) => m.set(h, [...(m.get(h) ?? []), x]);
+    for (const mv of findMoves(cmp)) {
+      add(mv.fromHunk, { other: mv.toHunk, dir: 'to', move: mv });
+      add(mv.toHunk, { other: mv.fromHunk, dir: 'from', move: mv });
+    }
+    return m;
+  }, [cmp]);
   const list = useRef<HTMLOListElement>(null);
   const [tab, setTab] = useState<'changes' | 'notes'>('changes');
+  const [openOnly, setOpenOnly] = useState(false);
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
   const showNotes = !!review && tab === 'notes';
+  const total = summaries.length;
+  const done = [...decisions.keys()].filter((h) => h < total).length;
+  const rejected = [...decisions.values()].filter((d) => d === 'rejected').length;
 
   // Keeps the current change's card in view (scrolled directly: a smooth scroll here would
   // cancel the documents' own in some browsers).
@@ -91,12 +129,54 @@ export function ChangesPanel({ cmp, current, same, onGo, onClose, review }: Pane
           <Ico name="close" />
         </button>
       </div>
+      {!showNotes && total > 0 && (
+        <div className="decide-bar">
+          <div className="decide-progress" role="progressbar" aria-label="Changes decided" aria-valuemin={0} aria-valuemax={total} aria-valuenow={done}>
+            <span style={{ width: `${(done / total) * 100}%` }} />
+          </div>
+          <span className="decide-count">
+            {done} of {total} decided
+          </span>
+          <span className="decide-filters">
+            <label className="decide-filter">
+              <input type="checkbox" data-filter="open" checked={openOnly} onChange={(e) => setOpenOnly(e.currentTarget.checked)} />
+              <span>Open only</span>
+            </label>
+            <label className="decide-filter">
+              <input type="checkbox" data-filter="flagged" checked={flaggedOnly} onChange={(e) => setFlaggedOnly(e.currentTarget.checked)} />
+              <span>Flagged only</span>
+            </label>
+          </span>
+          {rejected > 0 && (
+            <button type="button" className="btn sm" data-decisions="apply" data-tip="Put A’s text back in B where you rejected a change" onClick={onApplyDecisions}>
+              Apply decisions to B
+            </button>
+          )}
+        </div>
+      )}
+      {!showNotes && total > 0 && (summary.available || summary.points) && <SummaryBox summary={summary} onGo={onGo} onSummarize={onSummarize} onStop={onStopSummary} />}
       {showNotes ? (
         <NotesList review={review} />
       ) : (
         <ol className="changes-list scroll-thin" id="changes-list" ref={list}>
           {summaries.length ? (
-            summaries.map((s, i) => <ChangeCard key={i} index={i} summary={s} current={i === current} marks={review?.byHunk.get(i)} onGo={onGo} />)
+            summaries.map((s, i) =>
+              ((openOnly && decisions.has(i)) || (flaggedOnly && !risks[i]?.length)) && i !== current ? null : (
+                <ChangeCard
+                  key={i}
+                  index={i}
+                  summary={s}
+                  current={i === current}
+                  marks={review?.byHunk.get(i)}
+                  decision={decisions.get(i)}
+                  risks={risks[i]}
+                  moves={moves.get(i)}
+                  pictures={pictures[i]}
+                  onGo={onGo}
+                  onDecide={onDecide}
+                />
+              ),
+            )
           ) : (
             <li className="changes-none">
               <Ico name="check" />
@@ -114,20 +194,39 @@ const ChangeCard = memo(function ChangeCard({
   summary: s,
   current,
   marks,
+  decision,
+  risks,
+  moves,
+  pictures,
   onGo,
+  onDecide,
 }: {
   index: number;
   summary: ChangeSummary;
   current: boolean;
   marks?: ChangeMarks;
+  decision?: Decision;
+  risks?: readonly RiskKind[];
+  moves?: ReadonlyArray<{ other: number; dir: 'to' | 'from'; move: Move }>;
+  pictures?: readonly PicturePair[];
   onGo(hunk: number): void;
+  onDecide(hunk: number, status: Decision): void;
 }) {
   return (
-    <li>
+    <li className={`chg-item${decision ? ` ${decision}` : ''}`}>
+      <div className="chg-decide" role="group" aria-label={`Decision on change ${index + 1}`}>
+        <button type="button" className="decide accept" data-decide="accepted" aria-pressed={decision === 'accepted'} aria-label="Accept" data-tip="Accept (A)" onClick={() => onDecide(index, 'accepted')}>
+          <Ico name="check" size={14} />
+        </button>
+        <button type="button" className="decide reject" data-decide="rejected" aria-pressed={decision === 'rejected'} aria-label="Reject" data-tip="Reject (X)" onClick={() => onDecide(index, 'rejected')}>
+          <Ico name="close" size={14} />
+        </button>
+      </div>
       <button type="button" className={`chg-card k-${s.kind}${current ? ' cur' : ''}`} aria-current={current || undefined} data-hunk={index} onClick={() => onGo(index)}>
         <span className="chg-head">
           <span className="chg-n">{index + 1}.</span>
-          <span className="chg-kind">{KIND_LABEL[s.kind]}</span>
+          <span className="chg-kind">{moves?.length && (s.kind === 'del' || s.kind === 'ins') ? 'Moved' : KIND_LABEL[s.kind]}</span>
+          {decision && <span className={`chg-status ${decision}`}>{DECISION_NAME[decision]}</span>}
           {(s.minus > 0 || s.plus > 0) && (
             <span className="chg-counts">
               {s.minus > 0 && (
@@ -178,10 +277,74 @@ const ChangeCard = memo(function ChangeCard({
           </Fragment>
         ))}
         {s.more > 0 && <span className="chg-more">and {plural(s.more, 'more edit')}</span>}
+        {pictures && pictures.length > 0 && (
+          <span className="chg-pics" aria-label={`${pictures.length === 1 ? 'A picture' : `${pictures.length} pictures`} changed`}>
+            <img src={pictures[0]!.a.src} alt="" />
+            <Ico name="arrow" size={14} />
+            <img src={pictures[0]!.b.src} alt="" />
+            {pictures.length > 1 && <b>+{pictures.length - 1}</b>}
+          </span>
+        )}
+        {moves?.map((m, k) => (
+          <span key={k} className="chg-move" data-move={m.other}>
+            {m.dir === 'to' ? 'Moved to' : 'Moved here from'} change {m.other + 1}
+            {m.move.exact ? '' : ', with changes'}
+          </span>
+        ))}
+        {risks && risks.length > 0 && (
+          <span className="chg-risks">
+            {risks.map((r) => (
+              <span key={r} className={`risk ${r}`} data-risk={r}>
+                {RISK_NAME[r]}
+              </span>
+            ))}
+          </span>
+        )}
       </button>
     </li>
   );
 });
+
+/** Claude's summary of what matters, each point going to its changes; or the button to ask for it. */
+function SummaryBox({ summary, onGo, onSummarize, onStop }: { summary: PanelProps['summary']; onGo(h: number): void; onSummarize(): void; onStop(): void }) {
+  const { points, running, available } = summary;
+  return (
+    <section className="summary-box" aria-label="What matters">
+      <div className="summary-head">
+        <span className="summary-title">What matters</span>
+        {running ? (
+          <button type="button" className="btn ghost sm" data-summary="stop" onClick={onStop}>
+            Stop
+          </button>
+        ) : (
+          available && (
+            <button type="button" className="btn ghost sm" data-summary="ask" onClick={onSummarize}>
+              <Ico name="spell" />
+              <span>{points ? 'Summarise again' : 'Summarise with Claude'}</span>
+            </button>
+          )
+        )}
+      </div>
+      {running && <p className="summary-note">Claude is reading the changes…</p>}
+      {!running && !points && <p className="summary-note">A short list of the changes that change the meaning. Sends the changed words to Claude.</p>}
+      {points && points.length > 0 && (
+        <ul className="summary-points">
+          {points.map((p, i) => (
+            <li key={i}>
+              <span>{p.text}</span>
+              {p.changes.map((c) => (
+                <button key={c} type="button" className="summary-go" data-go={c} onClick={() => onGo(c)}>
+                  {c + 1}
+                </button>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
+      {points && !points.length && !running && <p className="summary-note">Nothing that changes the meaning: only wording and formatting.</p>}
+    </section>
+  );
+}
 
 /** The words that differ, marked, with the text around them. */
 function ExcerptText({ x }: { x: Excerpt }) {
@@ -230,7 +393,10 @@ function MarkCard({ mark: m, review }: { mark: PanelMark; review: PanelReview })
         {m.kind === 'note' ? <Ico name="note" size={14} /> : <span className={`rh ${m.color}`} aria-hidden="true" />}
         <span className="chg-kind">{m.kind === 'note' ? 'Note' : 'Highlight'}</span>
         {where && <span className="mark-where">{where}</span>}
-        <span className="mark-when">{when(m.created)}</span>
+        <span className="mark-when">
+          {m.author && `${m.author}, `}
+          {when(m.created)}
+        </span>
       </span>
       {m.quote && <span className="mark-quote">“{m.quote.length > 140 ? `${m.quote.slice(0, 139)}…` : m.quote}”</span>}
       {m.text && <span className="mark-text">{m.text}</span>}

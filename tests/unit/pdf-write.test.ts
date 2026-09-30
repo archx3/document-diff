@@ -100,3 +100,24 @@ describe('PDF export', () => {
     expect(table && blockText(table)).toBe('name\tqty\nApple\t3\nPear\t5');
   });
 });
+
+describe('redline as PDF', () => {
+  it('shows removed text struck out in red and added text underlined in green, with the review notes after', async () => {
+    const { redlineDoc } = await import('../../src/core/redline');
+    const { pdfDefinition } = await import('../../src/formats/pdf/write');
+    const a = readPlainText('Payment is due in 30 days.\n\nThe term is one year.\n', 'a.txt');
+    const b = readPlainText('Payment is due in 45 days.\n\nLate payments carry interest.\n\nThe term is one year.\n', 'b.txt');
+    const cmp = compareDocs(a, b, O);
+    const doc = redlineDoc(cmp, undefined, [{ text: 'Agreed with the client.', date: Date.UTC(2026, 8, 1), author: 'Sam', on: { kind: 'change', hunk: 0 } }]);
+    const runs = JSON.stringify(pdfDefinition(doc));
+    expect(runs).toMatch(/"text":"30","color":"#b3261e","decoration":"lineThrough"/);
+    expect(runs).toMatch(/"text":"45","color":"#1d6b3a","decoration":"underline"/);
+    expect(runs).toContain('Late payments carry interest.');
+    expect(runs).toContain('Review notes');
+    expect(runs).toContain('Agreed with the client.');
+    const out = await roundTrip(doc);
+    const text = out.blocks.map(blockText).join('\n');
+    expect(text).toContain('Payment is due in 3045 days.');
+    expect(text).toContain('Agreed with the client.');
+  });
+});

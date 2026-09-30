@@ -1,11 +1,11 @@
-import { useMemo } from 'react';
 import type { Ref } from 'react';
 import { Ico } from '../components/icons';
 import type { Comparison } from '../core/compare';
 import type { Doc } from '../core/model';
-import { isBlank, wordCount } from '../core/model';
 import { Counter } from './counter';
 import type { Side } from './util';
+import { kindOf, pairKind } from '../media/kinds';
+import { useFacts } from './facts';
 import { SIDE_NAME, kindLabel, plural } from './util';
 
 export type DocMenu = 'load' | 'export';
@@ -34,7 +34,8 @@ export function ColumnHeads({ a, b, edits, cmp, current, open, onMenu, ref }: He
         <Slot side="a" doc={a} edits={edits.a} open={open} onMenu={onMenu} />
       </div>
       <div className="colhead gut">
-        <Counter cmp={cmp} current={current} id="counter" />
+        {/* Changes are counted in text; pictures and recordings say what changed in their toolbar. */}
+        {pairKind(a, b) === 'text' && <Counter cmp={cmp} current={current} id="counter" />}
       </div>
       <div className="colhead b">
         <Slot side="b" doc={b} edits={edits.b} open={open} onMenu={onMenu} />
@@ -44,8 +45,7 @@ export function ColumnHeads({ a, b, edits, cmp, current, open, onMenu, ref }: He
 }
 
 function Slot({ side, doc, edits, open, onMenu }: { side: Side; doc: Doc; edits: number; open: string | null; onMenu: HeadsProps['onMenu'] }) {
-  const words = useMemo(() => wordCount(doc), [doc]);
-  const paras = useMemo(() => doc.blocks.filter((b) => b.type !== 'marker' && !isBlank(b)).length, [doc]);
+  const facts = useFacts(doc);
   const name = SIDE_NAME[side];
   return (
     <div className="slot" data-side={side}>
@@ -57,9 +57,14 @@ function Slot({ side, doc, edits, open, onMenu }: { side: Side; doc: Doc; edits:
           {doc.name}
         </div>
         <div className="slot-meta">
-          <span className="badge">{kindLabel(doc)}</span>
-          <span>{plural(words, 'word')}</span>
-          <span>{paras.toLocaleString()} ¶</span>
+          <span className="badge" data-kind={kindOf(doc)}>
+            {kindLabel(doc)}
+          </span>
+          {facts.map((f, i) => (
+            <span key={i} data-fact={i}>
+              {f}
+            </span>
+          ))}
           {edits > 0 && <span className="edited">{plural(edits, 'edit')} applied</span>}
         </div>
       </div>

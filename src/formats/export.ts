@@ -46,6 +46,14 @@ export function exportFormats(doc: Doc): ExportFormat[] {
   const md: ExportFormat = { id: 'md', label: 'Markdown', ext: 'md', mime: 'text/markdown', build: docToMarkdown };
   const txt: ExportFormat = { id: 'txt', label: 'Plain text', ext: 'txt', mime: 'text/plain', build: (d) => (d.kind === 'text' ? docToPlainLines(d) : docToText(d)) };
   switch (doc.kind) {
+    case 'image':
+    case 'audio': {
+      // A picture or recording is saved as the file it is.
+      const obj = doc.blocks[0]?.type === 'p' ? doc.blocks[0].spans.find((s) => s.obj?.data)?.obj : undefined;
+      if (!obj?.data) return [];
+      const ext = doc.ext || (doc.kind === 'image' ? 'png' : 'mp3');
+      return [{ id: 'native', label: doc.kind === 'image' ? 'Picture' : 'Recording', hint: `Same format (.${ext})`, ext, mime: obj.mime ?? 'application/octet-stream', build: () => obj.data! }];
+    }
     case 'odt':
       return [odt, word, pdf, rtf, html, md, txt];
     case 'rtf':

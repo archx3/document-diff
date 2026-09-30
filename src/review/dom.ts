@@ -222,9 +222,11 @@ const HIGHLIGHT_CSS = `
   text-decoration-thickness: 1.5px;
   text-underline-offset: 3px;
 }
-::highlight(collate-focus) { background-color: var(--focus-mark); }
+::highlight(collate-focus) { background-color: var(--focus-mark); text-decoration: underline solid var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+::highlight(collate-hover) { background-color: var(--hover-mark); }
 ::highlight(collate-spell) { text-decoration: underline wavy var(--spell); text-decoration-thickness: 1.25px; text-underline-offset: 3px; }
 ::highlight(collate-grammar) { text-decoration: underline wavy var(--grammar); text-decoration-thickness: 1.25px; text-underline-offset: 3px; }
+::highlight(collate-contract) { text-decoration: underline wavy var(--contract); text-decoration-thickness: 1.5px; text-underline-offset: 3px; background-color: var(--contract-mark); }
 `;
 
 let styled = false;
@@ -260,12 +262,17 @@ export function segmentRange(grid: Element, side: Side, rowKey: string, block: B
   return at ? ct.range(at[0], at[1]) : null;
 }
 
-/** Paints ranges under a highlight name (with none, removes it). */
-export function paintRanges(name: string, ranges: readonly Range[]): void {
+/** Paints ranges under a highlight name (with none, removes it); a higher `priority` paints over the others. */
+export function paintRanges(name: string, ranges: readonly Range[], priority = 0): void {
   const api = registry();
   if (!api) return;
-  if (ranges.length) api.reg.set(name, new api.Highlight(...ranges));
-  else api.reg.delete(name);
+  if (!ranges.length) {
+    api.reg.delete(name);
+    return;
+  }
+  const h = new api.Highlight(...ranges) as { priority: number };
+  h.priority = priority;
+  api.reg.set(name, h);
 }
 
 /** The page ranges of a placed text mark. */
@@ -285,32 +292,29 @@ export function markRanges(grid: Element, p: Placed): Range[] {
 }
 
 /**
- * Colours the marked text on the page, and `focus` (the text a card is open
- * for) more strongly. Without a grid it clears them; where the browser can't
- * paint ranges, it does nothing.
+ * Colours the marked text on the page, and `focus` (the text a card or menu is
+ * open for) more strongly. Returns where each note and highlight is, by mark.
+ * Without a grid it clears them; where the browser can't paint ranges, it does
+ * nothing.
  */
 export function paintMarks(grid: Element | null, placed: readonly Placed[], focus: readonly Placed[] = []): Map<string, Range[]> {
-  const notes = new Map<string, Range[]>();
+  const byMark = new Map<string, Range[]>();
   const api = registry();
-  if (!api) return notes;
+  if (!api) return byMark;
   const groups = new Map<Paint, Range[]>(PAINTS.map((p) => [p, []]));
   if (grid) {
     for (const p of placed) {
       const m = p.mark;
-      if (m.kind === 'reaction' || !p.found || !p.side) continue;
+      if (m.kind === 'reaction' || m.kind === 'status' || !p.found || !p.side) continue;
       const paint: Paint = m.kind === 'note' ? 'note' : `hl-${m.color}`;
       const ranges = markRanges(grid, p);
       groups.get(paint)!.push(...ranges);
-      if (m.kind === 'note') notes.set(m.id, ranges);
+      byMark.set(m.id, ranges);
     }
     for (const p of focus) groups.get('focus')!.push(...markRanges(grid, p));
   }
-  for (const [paint, ranges] of groups) {
-    const name = `collate-${paint}`;
-    if (ranges.length) api.reg.set(name, new api.Highlight(...ranges));
-    else api.reg.delete(name);
-  }
-  return notes;
+  for (const [paint, ranges] of groups) paintRanges(`collate-${paint}`, ranges, paint === 'focus' ? 2 : 0);
+  return byMark;
 }
 
 /** The key of the ranges (a note's, a finding's) at a point on the screen, if any. */
@@ -333,11 +337,13 @@ export function rangeAt(ranges: ReadonlyMap<string, readonly Range[]>, x: number
     }
   }
   if (!node) return null;
+  // The caret goes to the nearest character, even from the space after the end of a line: the point must be on the words too.
+  const on = (r: Range) => Array.from(r.getClientRects()).some((b) => x >= b.left - 1 && x <= b.right + 1 && y >= b.top - 1 && y <= b.bottom + 1);
   for (const [id, list] of ranges) {
     for (const r of list) {
       try {
         // Inside the range, not just touching its end.
-        if (r.isPointInRange(node, offset) && !(node === r.endContainer && offset === r.endOffset)) return id;
+        if (r.isPointInRange(node, offset) && !(node === r.endContainer && offset === r.endOffset) && on(r)) return id;
       } catch {
         /* a range from another document */
       }

@@ -11,7 +11,8 @@
  */
 import type { Speller } from './spell';
 
-export type IssueKind = 'spelling' | 'grammar';
+/** Spelling, grammar, or a contract check (check/contract.ts). */
+export type IssueKind = 'spelling' | 'grammar' | 'contract';
 
 export interface Issue {
   kind: IssueKind;

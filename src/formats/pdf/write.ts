@@ -86,6 +86,14 @@ function runOf(text: string, fmt: Fmt, ctx: Ctx): Node {
   else if (fmt.sub) run.sub = true;
   if (fmt.code && !ctx.mono) run.font = 'Courier';
   if (fmt.hl) run.background = '#fff2a8';
+  // A redline's changes, as a word processor shows tracked changes.
+  if (fmt.rev === 'ins') {
+    run.color = '#1d6b3a';
+    run.decoration = 'underline';
+  } else if (fmt.rev === 'del') {
+    run.color = '#b3261e';
+    run.decoration = 'lineThrough';
+  }
   if (fmt.href && /^(https?|mailto):/i.test(fmt.href)) {
     run.link = fmt.href;
     run.color = '#1f4fbf';

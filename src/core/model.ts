@@ -21,6 +21,8 @@ export interface Fmt {
   href?: string;
   /** Highlight colour, shown only. */
   hl?: string;
+  /** In a redline: text added or removed between the versions (shown only, never compared). */
+  rev?: 'ins' | 'del';
 }
 
 export type ObjKind =
@@ -32,7 +34,8 @@ export type ObjKind =
   | 'pagebreak'
   | 'symbol'
   | 'textbox'
-  | 'object';
+  | 'object'
+  | 'audio';
 
 export interface InlineObject {
   kind: ObjKind;
@@ -143,7 +146,7 @@ export interface MarkerBlock extends BlockBase {
 
 export type Block = ParaBlock | TableBlock | OpaqueBlock | MarkerBlock;
 
-export type DocKind = 'docx' | 'odt' | 'rtf' | 'doc' | 'epub' | 'pdf' | 'html' | 'text' | 'markdown' | 'csv' | 'sample';
+export type DocKind = 'docx' | 'odt' | 'rtf' | 'doc' | 'epub' | 'pdf' | 'html' | 'text' | 'markdown' | 'csv' | 'sample' | 'image' | 'audio';
 
 export interface Doc {
   id: string;

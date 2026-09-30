@@ -15,8 +15,10 @@ export default defineConfig({
     launchOptions: localChromium ? { executablePath: localChromium } : {},
   },
   webServer: {
-    // The site is a static export (out/); Vite's preview server serves it.
-    command: 'npx next build && npx vite preview --outDir out --port 4174 --strictPort',
+    // The built site, served by Next (pages and the API routes). Transcription goes to the service on
+    // TRANSCRIBE_URL when it is running (npm run server); the test that needs it is skipped otherwise.
+    command: 'npx next build && npx next start --port 4174',
+    env: { TRANSCRIBE_URL: process.env.TRANSCRIBE_URL ?? 'http://127.0.0.1:8787' },
     port: 4174,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

@@ -47,14 +47,15 @@ export function usePageDrop(onDrop: (files: File[]) => void): boolean {
   return dragging;
 }
 
-/** A hidden file input: render `input` somewhere and call `open` from a click. */
-export function useFilePicker(onPick: (files: File[]) => void, accept: string) {
+/** A hidden file input: render `input` somewhere and call `open` from a click. With `multiple`, up to two can be chosen. */
+export function useFilePicker(onPick: (files: File[]) => void, accept: string, multiple = false) {
   const ref = useRef<HTMLInputElement>(null);
   const input = (
     <input
       ref={ref}
       type="file"
       accept={accept}
+      multiple={multiple}
       hidden
       onChange={(e) => {
         const files = Array.from(e.currentTarget.files ?? []);

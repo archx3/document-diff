@@ -14,8 +14,8 @@ export default function NewComparisonPage() {
     <div className={site.page}>
       <SiteHeader>
         <div className={site.actions}>
-          <Link href="/compare/sample/" className={`${site.pill} ${site.quiet} ${site.small}`}>
-            See a sample comparison
+          <Link href="/samples/" className={`${site.pill} ${site.quiet} ${site.small}`}>
+            Try a sample
           </Link>
         </div>
       </SiteHeader>

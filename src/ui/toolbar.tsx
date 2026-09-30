@@ -1,8 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { KeyboardEvent, MouseEvent, ReactNode, RefObject } from 'react';
+import type { MouseEvent, ReactNode, RefObject } from 'react';
 import type { IconName } from '../components/icons';
 import { Ico } from '../components/icons';
 import type { Comparison } from '../core/compare';
+import { Segmented } from '../components/ui/segmented';
+import type { MediaKind } from '../media/kinds';
+import { MEDIA } from '../media/kinds';
 import { Counter } from './counter';
 import type { View } from './util';
 
@@ -140,7 +143,7 @@ export function AppBar({ home, hasDocs, lowContrast, dark, onSwap, onNew, onCont
             {word}
           </span>
         )}
-        <span className="brand-tag">Compare two documents and copy changes across</span>
+        <span className="brand-tag">Compare two versions of a document, picture or recording</span>
       </div>
       <div className="appbar-actions">
         <Tool id="btn-swap" icon="swap" label="Swap A and B" disabled={!hasDocs} onClick={onSwap} />
@@ -191,7 +194,7 @@ interface ToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   /** The toolbar menu that is open. */
-  menu: 'options' | 'copy' | 'check' | null;
+  menu: 'options' | 'copy' | 'check' | 'redline' | 'report' | 'share' | null;
   /** What to say when the documents match. */
   same: string;
   onPrev: Click;
@@ -207,116 +210,191 @@ interface ToolbarProps {
   onUndo: Click;
   onRedo: Click;
   onCopy: Click;
+  onRedline: Click;
+  onReport: Click;
+  onShare: Click;
   onSidebar: Click;
   onReview: Click;
   onCheck: Click;
   onCheckMenu: Click;
 }
 
+interface FrameProps {
+  /** What is compared: each kind has its own tools. */
+  kind: MediaKind;
+  /** Nothing to compare yet (the tools are dimmed), or the two are the same (the bar turns green). */
+  idle?: boolean;
+  same?: boolean;
+  /** What changed; how it is shown; editing and getting it out. */
+  left: ReactNode;
+  middle: ReactNode;
+  right: ReactNode;
+}
+
 /**
- * Three columns: the changes on the left, the view in the middle (centred)
- * and editing on the right.
+ * The toolbar: three columns — what changed on the left, how it is shown in
+ * the middle (centred), editing and getting it out on the right — each filled
+ * by the tools for what is compared (text, images or audio).
  */
-export function Toolbar(p: Readonly<ToolbarProps>) {
+export function ToolbarFrame({ kind, idle, same, left, middle, right }: Readonly<FrameProps>) {
   const bar = useRef<HTMLDivElement>(null);
   useFocusRescue(bar);
+  return (
+    <div className={`toolbar${idle ? ' disabled' : ''}${same ? ' same' : ''}`} id="toolbar" data-kind={kind} role="toolbar" aria-label={`${MEDIA[kind].label} tools`} ref={bar}>
+      <div className="tcol left" role="group" aria-label="Changes">
+        {left}
+      </div>
+      <div className="tcol middle" role="group" aria-label="View">
+        {middle}
+      </div>
+      <div className="tcol right">{right}</div>
+    </div>
+  );
+}
+
+/** Undo and redo, which every kind of comparison has. */
+export function HistoryTools({ canUndo, canRedo, onUndo, onRedo }: Readonly<{ canUndo: boolean; canRedo: boolean; onUndo: Click; onRedo: Click }>) {
+  return (
+    <>
+      <Tool id="btn-undo" icon="undo" label="Undo" kbd="Ctrl+Z" keys="Control+Z Meta+Z" disabled={!canUndo} onClick={onUndo} />
+      <Tool id="btn-redo" icon="redo" label="Redo" kbd="Ctrl+Shift+Z" keys="Control+Shift+Z Meta+Shift+Z" disabled={!canRedo} onClick={onRedo} />
+    </>
+  );
+}
+
+/** Sharing the review as a file, which every kind of comparison has. */
+export function ShareTool({ expanded, onClick }: Readonly<{ expanded: boolean; onClick: Click }>) {
+  return <Tool id="btn-share" icon="link" label="Share the review" tip="Share: save the comparison and its review as a file to send, or open one" menu expanded={expanded} onClick={onClick} />;
+}
+
+/** The text tools: changes, views, review and checking, copying across, redline and report. */
+export function TextToolbar(p: Readonly<ToolbarProps>) {
   const n = p.cmp?.hunks.length ?? 0;
   const split = p.view === 'split';
   return (
-    <div className={`toolbar${p.cmp ? '' : ' disabled'}${p.cmp && n === 0 ? ' same' : ''}`} id="toolbar" role="toolbar" aria-label="Comparison tools" ref={bar}>
-      <div className="tcol left" role="group" aria-label="Changes">
-        <div className="tgroup nav">
-          <Tool id="btn-prev" icon="up" label="Previous change" kbd="P" disabled={p.nav.prev} onClick={p.onPrev} />
-          <Tool id="btn-next" icon="down" label="Next change" kbd="N" disabled={p.nav.next} onClick={p.onNext} />
+    <ToolbarFrame
+      kind="text"
+      idle={!p.cmp}
+      same={!!p.cmp && n === 0}
+      left={
+        <>
+          <div className="tgroup nav">
+            <Tool id="btn-prev" icon="up" label="Previous change" kbd="P" disabled={p.nav.prev} onClick={p.onPrev} />
+            <Tool id="btn-next" icon="down" label="Next change" kbd="N" disabled={p.nav.next} onClick={p.onNext} />
+            <Tool
+              id="btn-changes"
+              icon="changesOnly"
+              label="Changes only"
+              tip="Changes only: fold unchanged paragraphs"
+              kbd="C"
+              toggle
+              pressed={p.changesOnly && n > 0}
+              disabled={n === 0}
+              onClick={p.onChangesOnly}
+            />
+          </div>
+          {/* On a phone the column heads, where the counter usually is, scroll away. */}
+          <Counter cmp={p.cmp} current={p.current} className="counter-m" />
+          <StatsHint cmp={p.cmp} same={p.same} />
+        </>
+      }
+      middle={
+        <>
+          <ViewSwitch view={p.view} disabled={!p.cmp} onView={p.onView} />
+          <Tool id="btn-minimap" icon="minimap" label="Minimap" tip="Minimap of each document beside the ruler" kbd="M" toggle pressed={p.minimap} disabled={!p.cmp} onClick={p.onMinimap} />
+          <Tool id="btn-lines" icon="lineNumbers" label="Line numbers" tip="Line numbers in the gutter" kbd="L" toggle pressed={p.lines} disabled={!p.cmp} onClick={p.onLines} />
           <Tool
-            id="btn-changes"
-            icon="changesOnly"
-            label="Changes only"
-            tip="Changes only: fold unchanged paragraphs"
-            kbd="C"
+            id="btn-bands"
+            icon="connector"
+            label="Connection bands"
+            tip={split ? 'Connection bands: each document runs on unbroken, with bands joining its changes to the other’s' : 'Connection bands: in the side by side view'}
+            kbd="B"
             toggle
-            pressed={p.changesOnly && n > 0}
-            disabled={n === 0}
-            onClick={p.onChangesOnly}
+            pressed={p.bands && split}
+            disabled={!p.cmp || !split}
+            onClick={p.onBands}
           />
-        </div>
-        {/* On a phone the column heads, where the counter usually is, scroll away. */}
-        <Counter cmp={p.cmp} current={p.current} className="counter-m" />
-        <StatsHint cmp={p.cmp} same={p.same} />
-      </div>
-      <div className="tcol middle" role="group" aria-label="View">
-        <ViewSwitch view={p.view} disabled={!p.cmp} onView={p.onView} />
-        <Tool id="btn-minimap" icon="minimap" label="Minimap" tip="Minimap of each document beside the ruler" kbd="M" toggle pressed={p.minimap} disabled={!p.cmp} onClick={p.onMinimap} />
-        <Tool id="btn-lines" icon="lineNumbers" label="Line numbers" tip="Line numbers in the gutter" kbd="L" toggle pressed={p.lines} disabled={!p.cmp} onClick={p.onLines} />
-        <Tool
-          id="btn-bands"
-          icon="connector"
-          label="Connection bands"
-          tip={split ? 'Connection bands: each document runs on unbroken, with bands joining its changes to the other’s' : 'Connection bands: in the side by side view'}
-          kbd="B"
-          toggle
-          pressed={p.bands && split}
-          disabled={!p.cmp || !split}
-          onClick={p.onBands}
-        />
-        <Tool
-          id="btn-options"
-          icon="sliders"
-          label="Compare options"
-          tip="Compare options: what counts as a difference"
-          menu
-          expanded={p.menu === 'options'}
-          disabled={!p.cmp}
-          onClick={p.onOptions}
-        />
-        <Tool
-          id="btn-review"
-          icon="review"
-          label="Review mode"
-          tip={p.review ? 'Review mode: notes, highlights and reactions in the margins' : p.marks ? `Review mode: show your ${p.marks === 1 ? 'mark' : `${p.marks} marks`}` : 'Review mode: add notes, highlights and reactions from the margins'}
-          kbd="R"
-          toggle
-          pressed={p.review && !!p.cmp}
-          className={!p.review && p.marks ? 'has-marks' : undefined}
-          disabled={!p.cmp}
-          onClick={p.onReview}
-        />
-        <div className={`tgroup check${p.checking ? ' busy' : ''}`}>
           <Tool
-            id="btn-check"
-            icon="spell"
-            label="Spelling and grammar"
-            tip={p.check ? (p.issues === null ? 'Spelling and grammar: loading the dictionary' : `Spelling and grammar: ${p.issues === 0 ? 'no issues' : `${p.issues} to look at`}`) : 'Spelling and grammar: underline mistakes in both documents'}
-            kbd="G"
-            toggle
-            pressed={p.check && !!p.cmp}
+            id="btn-options"
+            icon="sliders"
+            label="Compare options"
+            tip="Compare options: what counts as a difference"
+            menu
+            expanded={p.menu === 'options'}
             disabled={!p.cmp}
-            onClick={p.onCheck}
-          >
-            <Ico name="spell" />
-            {p.check && !!p.issues && <span className="tbadge">{p.issues > 99 ? '99+' : p.issues}</span>}
-          </Tool>
-          <Tool id="btn-check-menu" icon="chevron" label="Spelling and grammar options" tip="Language, Claude and your dictionary" menu expanded={p.menu === 'check'} disabled={!p.cmp} onClick={p.onCheckMenu}>
-            <span />
-          </Tool>
-        </div>
-        <hr className="tsep" aria-orientation="vertical" />
-        <div className="tgroup pages">
-          <TextTool id="btn-page-prev" text="Previous page" tip="Scroll up a screen" kbd="Page Up" keys="PageUp" disabled={p.nav.pageUp} onClick={p.onPagePrev} />
-          <TextTool id="btn-page-next" text="Next page" tip="Scroll down a screen" kbd="Page Down" keys="PageDown" disabled={p.nav.pageDown} onClick={p.onPageNext} />
-        </div>
-      </div>
-      <div className="tcol right">
-        <div className="tgroup edit" role="group" aria-label="Edit">
-          <Tool id="btn-undo" icon="undo" label="Undo" kbd="Ctrl+Z" keys="Control+Z Meta+Z" disabled={!p.canUndo} onClick={p.onUndo} />
-          <Tool id="btn-redo" icon="redo" label="Redo" kbd="Ctrl+Shift+Z" keys="Control+Shift+Z Meta+Shift+Z" disabled={!p.canRedo} onClick={p.onRedo} />
-          <Tool id="btn-all" icon="merge" label="Copy changes" tip="Copy this change or every change across" menu expanded={p.menu === 'copy'} disabled={n === 0} onClick={p.onCopy} />
-        </div>
-        <div className="tgroup panel">
-          <Tool id="btn-sidebar" icon="sidebar" label="List of changes" kbd="S" toggle pressed={p.sidebar && !!p.cmp} controls="changes" disabled={!p.cmp} onClick={p.onSidebar} />
-        </div>
-      </div>
-    </div>
+            onClick={p.onOptions}
+          />
+          <Tool
+            id="btn-review"
+            icon="review"
+            label="Review mode"
+            tip={p.review ? 'Review mode: notes, highlights and reactions in the margins' : p.marks ? `Review mode: show your ${p.marks === 1 ? 'mark' : `${p.marks} marks`}` : 'Review mode: add notes, highlights and reactions from the margins'}
+            kbd="R"
+            toggle
+            pressed={p.review && !!p.cmp}
+            className={!p.review && p.marks ? 'has-marks' : undefined}
+            disabled={!p.cmp}
+            onClick={p.onReview}
+          />
+          <div className={`tgroup check${p.checking ? ' busy' : ''}`}>
+            <Tool
+              id="btn-check"
+              icon="spell"
+              label="Spelling and grammar"
+              tip={p.check ? (p.issues === null ? 'Spelling and grammar: loading the dictionary' : `Spelling and grammar: ${p.issues === 0 ? 'no issues' : `${p.issues} to look at`}`) : 'Spelling and grammar: underline mistakes in both documents'}
+              kbd="G"
+              toggle
+              pressed={p.check && !!p.cmp}
+              disabled={!p.cmp}
+              onClick={p.onCheck}
+            >
+              <Ico name="spell" />
+              {p.check && !!p.issues && <span className="tbadge">{p.issues > 99 ? '99+' : p.issues}</span>}
+            </Tool>
+            <Tool id="btn-check-menu" icon="chevron" label="Spelling and grammar options" tip="Language, Claude and your dictionary" menu expanded={p.menu === 'check'} disabled={!p.cmp} onClick={p.onCheckMenu}>
+              <span />
+            </Tool>
+          </div>
+          <hr className="tsep" aria-orientation="vertical" />
+          <div className="tgroup pages">
+            <TextTool id="btn-page-prev" text="Previous page" tip="Scroll up a screen" kbd="Page Up" keys="PageUp" disabled={p.nav.pageUp} onClick={p.onPagePrev} />
+            <TextTool id="btn-page-next" text="Next page" tip="Scroll down a screen" kbd="Page Down" keys="PageDown" disabled={p.nav.pageDown} onClick={p.onPageNext} />
+          </div>
+        </>
+      }
+      right={
+        <>
+          <div className="tgroup edit" role="group" aria-label="Edit">
+            <HistoryTools canUndo={p.canUndo} canRedo={p.canRedo} onUndo={p.onUndo} onRedo={p.onRedo} />
+            <Tool id="btn-all" icon="merge" label="Copy changes" tip="Copy this change or every change across" menu expanded={p.menu === 'copy'} disabled={n === 0} onClick={p.onCopy} />
+            <Tool
+              id="btn-redline"
+              icon="download"
+              label="Download redline"
+              tip="Redline: a Word file with every change as a tracked change"
+              menu
+              expanded={p.menu === 'redline'}
+              disabled={n === 0}
+              onClick={p.onRedline}
+            />
+            <Tool
+              id="btn-report"
+              icon="doc"
+              label="Change report"
+              tip="Report: every change with its decision, reactions and notes, as PDF or Word"
+              menu
+              expanded={p.menu === 'report'}
+              disabled={!p.cmp}
+              onClick={p.onReport}
+            />
+            <ShareTool expanded={p.menu === 'share'} onClick={p.onShare} />
+          </div>
+          <div className="tgroup panel">
+            <Tool id="btn-sidebar" icon="sidebar" label="List of changes" kbd="S" toggle pressed={p.sidebar && !!p.cmp} controls="changes" disabled={!p.cmp} onClick={p.onSidebar} />
+          </div>
+        </>
+      }
+    />
   );
 }
 
@@ -325,38 +403,17 @@ const VIEWS: ReadonlyArray<{ view: View; icon: IconName; label: string; tip: str
   { view: 'unified', icon: 'unified', label: 'Unified', tip: 'Unified: one column, A above B where they differ' },
 ];
 
-/** Side by side or unified: two segments, one of them chosen, that arrow keys move between. */
+/** Side by side or unified. */
 function ViewSwitch({ view, disabled, onView }: Readonly<{ view: View; disabled: boolean; onView(view: View): void }>) {
-  const group = useRef<HTMLDivElement>(null);
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const i = VIEWS.findIndex((v) => v.view === view);
-    const to = e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'Home' ? 0 : e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'End' ? VIEWS.length - 1 : -1;
-    if (to < 0 || to === i) return;
-    e.preventDefault();
-    onView(VIEWS[to]!.view);
-    group.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[to]?.focus();
-  };
   return (
-    <div className="seg" id="view" role="radiogroup" aria-label="View" ref={group} onKeyDown={onKeyDown}>
-      {VIEWS.map((v) => (
-        <button
-          key={v.view}
-          type="button"
-          role="radio"
-          id={`btn-view-${v.view}`}
-          aria-checked={view === v.view}
-          aria-label={v.label}
-          aria-keyshortcuts="V"
-          data-tip={v.tip}
-          data-kbd="V"
-          tabIndex={view === v.view ? 0 : -1}
-          disabled={disabled}
-          onClick={() => onView(v.view)}
-        >
-          <Ico name={v.icon} />
-        </button>
-      ))}
-    </div>
+    <Segmented
+      id="view"
+      label="View"
+      value={view}
+      disabled={disabled}
+      onChange={onView}
+      segments={VIEWS.map((v) => ({ value: v.view, id: `btn-view-${v.view}`, label: v.label, tip: v.tip, kbd: 'V', content: <Ico name={v.icon} /> }))}
+    />
   );
 }
 

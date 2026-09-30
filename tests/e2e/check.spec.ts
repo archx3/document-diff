@@ -138,3 +138,22 @@ test('Claude is offered only in the Claude app, and its suggestions can be appli
   await card.locator('[data-fix="by Monday"]').click();
   await expect(page.locator('.cell.a').first()).toContainText('files by Monday.');
 });
+
+test('contract checks: a missing clause, and words and figures that disagree', async ({ page }) => {
+  writeFileSync(`${OUT}/contract-a.txt`, '1. Services\n\n1.1 The work.\n\n2. Payment\n\n2.1 The fee is nine thousand dollars ($9,000).\n\n2.2 As set out in clause 1.1.\n');
+  writeFileSync(`${OUT}/contract-b.txt`, '1. Services\n\n1.1 The work.\n\n2. Payment\n\n2.1 The fee is nine thousand dollars ($9,500).\n\n2.2 As set out in clause 3.4.\n');
+  await page.goto('/compare/new/');
+  await chooseFile(page, `${OUT}/contract-a.txt`);
+  await chooseFile(page, `${OUT}/contract-b.txt`);
+  await expect(page.locator('.slot-name')).toHaveText(['contract-a.txt', 'contract-b.txt']);
+  await page.keyboard.press('g');
+  await expect.poll(() => painted(page, 'collate-contract')).toEqual(['$9,500', 'clause 3.4']);
+  await clickWords(page, 'collate-contract', 'clause 3.4');
+  const card = page.locator('#issue-card');
+  await expect(card.locator('.ic-kind')).toHaveText('Contract check');
+  await expect(card).toContainText('There is no clause 3.4 in this document');
+  await page.keyboard.press('Escape');
+  await clickWords(page, 'collate-contract', '$9,500');
+  await card.locator('[data-fix="$9,000"]').click();
+  await expect(page.locator('.cell.b', { hasText: 'The fee is' }).first()).toContainText('($9,000)');
+});

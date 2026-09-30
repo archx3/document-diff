@@ -3,11 +3,16 @@
  * files don't load them.
  */
 
+import { AUDIO_EXTENSIONS, IMAGE_EXTENSIONS, MEDIA_KINDS } from '../media/kinds';
+import type { MediaKind } from '../media/kinds';
+
 /** Every extension the file picker offers (other files can still be dropped). */
 export const ACCEPTED_EXTENSIONS = [
   'docx', 'docm', 'dotx', 'dotm', 'doc', 'dot', 'odt', 'ott', 'fodt', 'rtf', 'pdf', 'epub',
   'html', 'htm', 'xhtml', 'mht', 'mhtml', 'md', 'markdown', 'txt', 'csv', 'tsv', 'gdoc',
   'json', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf', 'log', 'tex', 'bib', 'rst', 'adoc', 'org', 'srt', 'vtt', 'sql',
+  ...IMAGE_EXTENSIONS,
+  ...AUDIO_EXTENSIONS,
 ];
 
 /** Lower-case extension of a file name, without the dot ('' when there is none). */
@@ -36,6 +41,8 @@ const FORMATS: FileFormat[] = [
   { name: 'CSV file', many: 'CSV files', exts: ['csv', 'tsv', 'tab'] },
   { name: 'YAML file', many: 'YAML files', exts: ['yaml', 'yml'] },
   { name: 'text file', many: 'text files', exts: ['txt', 'text'] },
+  { name: 'picture', many: 'pictures', exts: IMAGE_EXTENSIONS },
+  { name: 'audio file', many: 'audio files', exts: AUDIO_EXTENSIONS },
 ];
 
 /** The kind of file a name points to, or undefined when it has no extension. */
@@ -54,3 +61,12 @@ export function withArticle(name: string): string {
 export function acceptList(exts: readonly string[]): string {
   return exts.map((e) => `.${e}`).join(',');
 }
+
+/** The extensions a picker for one kind of file offers. */
+export function extensionsFor(kind: MediaKind): string[] {
+  if (kind === 'image') return IMAGE_EXTENSIONS;
+  if (kind === 'audio') return AUDIO_EXTENSIONS;
+  return ACCEPTED_EXTENSIONS.filter((e) => !IMAGE_EXTENSIONS.includes(e) && !AUDIO_EXTENSIONS.includes(e));
+}
+
+export { MEDIA_KINDS };

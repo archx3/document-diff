@@ -133,6 +133,119 @@ test.describe('marks', () => {
     await expect(card).toContainText('List them in a schedule.');
   });
 
+  test('a highlight shades under the pointer, opens its card with a click and its menu with a right-click', async ({ page }) => {
+    // (In a paragraph that did not change: in a changed one, a right-click is about the change.)
+    await select(cell(page, 'a', 'Deliverables include'), 'Deliverables');
+    await margin(page, 'a', 'Deliverables include').locator('[data-rail="highlight"]').click();
+    await page.evaluate(() => getSelection()!.removeAllRanges());
+    await expect.poll(() => painted(page, 'collate-hl-yellow')).toEqual(['Deliverables']);
+    const at = await page.evaluate(() => {
+      const r = [...(CSS as unknown as { highlights: Map<string, Iterable<Range>> }).highlights.get('collate-hl-yellow')!][0]!.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+
+    await page.mouse.move(at.x, at.y, { steps: 4 });
+    await expect.poll(() => painted(page, 'collate-hover')).toEqual(['Deliverables']);
+    await expect(page.locator('#scroller')).toHaveClass(/on-mark/);
+    await page.mouse.move(at.x, at.y + 200);
+    await expect.poll(() => painted(page, 'collate-hover')).toEqual([]);
+
+    // A click opens the margin card for the highlighted words.
+    await page.mouse.click(at.x, at.y);
+    const card = page.locator('#review-card');
+    await expect(card.locator('.rc-title')).toHaveText('Highlighted text in A');
+    await expect(card.locator('.rc-swatch[aria-pressed="true"]')).toHaveAttribute('data-color', 'yellow');
+    expect(await painted(page, 'collate-focus')).toEqual(['Deliverables']);
+    await page.keyboard.press('Escape');
+
+    // A right-click selects it and opens its menu in place of the browser's.
+    await page.mouse.click(at.x, at.y, { button: 'right' });
+    const menu = page.locator('#mark-menu');
+    await expect(menu).toBeVisible();
+    await expect(menu).toContainText('“Deliverables”');
+    expect(await painted(page, 'collate-focus')).toEqual(['Deliverables']);
+    await menu.locator('[data-color="blue"]').click();
+    await expect.poll(() => painted(page, 'collate-hl-blue')).toEqual(['Deliverables']);
+    expect(await painted(page, 'collate-hl-yellow')).toEqual([]);
+
+    await page.mouse.click(at.x, at.y, { button: 'right' });
+    await menu.locator('[data-mark="remove"]').click();
+    await expect.poll(() => painted(page, 'collate-hl-blue')).toEqual([]);
+    await expect(menu).toBeHidden();
+  });
+
+  test('a right-click on selected text offers to highlight it or add a note on it', async ({ page }) => {
+    const selectAndOpen = async () => {
+      await select(cell(page, 'a', 'Deliverables include'), 'Deliverables');
+      const at = await page.evaluate(() => {
+        const r = getSelection()!.getRangeAt(0).getBoundingClientRect();
+        return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      });
+      await page.mouse.click(at.x, at.y, { button: 'right' });
+    };
+    await selectAndOpen();
+    const menu = page.locator('#mark-menu');
+    await expect(menu).toContainText('Selected text in A');
+    expect(await painted(page, 'collate-focus')).toEqual(['Deliverables']);
+    await menu.locator('[data-color="pink"]').click();
+    await expect.poll(() => painted(page, 'collate-hl-pink')).toEqual(['Deliverables']);
+
+    await selectAndOpen();
+    await menu.locator('[data-mark="note"]').click();
+    const card = page.locator('#review-card');
+    await expect(card.locator('.rc-title')).toHaveText('Selected text in A');
+    await expect(card.getByRole('textbox', { name: 'A new note on the selected text' })).toBeFocused();
+  });
+
+  test('a right-click on a word-level change opens everything that can be done with it', async ({ page }) => {
+    const words = page.locator('.cell.b [data-c]', { hasText: 'eight' }).first();
+    // A left click still opens the change's own menu.
+    await words.click();
+    await expect(page.locator('.inline-pop')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await words.click({ button: 'right' });
+    const menu = page.locator('#change-menu');
+    await expect(menu).toContainText('“eight”');
+    expect(await painted(page, 'collate-focus')).toEqual(['eight']);
+    await menu.locator('[data-react="up"]').click();
+    await expect(menu.locator('[data-react="up"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(menu.locator('[data-inline="l2r"]')).toBeVisible();
+    await menu.locator('[data-color="green"]').click();
+    await expect.poll(() => painted(page, 'collate-hl-green')).toEqual(['eight']);
+
+    await words.click({ button: 'right' });
+    await expect(menu.locator('[data-color="green"]')).toHaveAttribute('aria-pressed', 'true');
+    await menu.locator('[data-mark="remove"]').click();
+    await expect.poll(() => painted(page, 'collate-hl-green')).toEqual([]);
+
+    await words.click({ button: 'right' });
+    await menu.locator('[data-mark="note"]').click();
+    const card = page.locator('#review-card');
+    await expect(card.locator('.rc-title')).toHaveText(/^Change \d+$/);
+    await expect(card.locator('[data-react="up"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(card.getByRole('textbox', { name: 'A new note on this change' })).toBeFocused();
+  });
+
+  test('a right-click on an added paragraph opens the same menu, for the whole paragraph', async ({ page }) => {
+    const added = cell(page, 'b', 'Accessibility review against');
+    await added.click({ button: 'right' });
+    const menu = page.locator('#change-menu');
+    await expect(menu).toContainText('Accessibility review against WCAG 2.2 AA');
+    expect(await painted(page, 'collate-focus')).toEqual(['Accessibility review against WCAG 2.2 AA']);
+    await menu.locator('[data-color="blue"]').click();
+    await expect.poll(() => painted(page, 'collate-hl-blue')).toEqual(['Accessibility review against WCAG 2.2 AA']);
+
+    // Its empty place in A has the same change, without words to highlight.
+    await added.click({ button: 'right' });
+    await expect(menu.locator('[data-mark="remove"]')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.locator('.row', { has: added }).first().locator('.cell.a').click({ button: 'right' });
+    await expect(menu.locator('.rc-swatch')).toHaveCount(0);
+    await menu.locator('[data-inline="l2r"]').click();
+    await expect(cell(page, 'b', 'Accessibility review against')).toHaveCount(0);
+  });
+
   test('marks are kept across a reload, move with a swap, and are listed once their text is gone', async ({ page }) => {
     // "newsletter" is only in B.
     await select(cell(page, 'b', 'The Contractor will design'), 'newsletter');

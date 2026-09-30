@@ -167,3 +167,7 @@
   color: var(--ink-3);
   font-size: 13.5px;
 }
+
+.kinds {
+  margin: 0 0 14px;
+}

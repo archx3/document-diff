@@ -13,6 +13,12 @@ export interface CompareOptions {
   ignoreEmpty: boolean;
   /** Treat curly quotes, dashes and ellipses like their plain ASCII forms. */
   normalizePunctuation: boolean;
+  /**
+   * Leave punctuation out: full stops, commas, quotes, brackets and dashes
+   * (a transcript's are the transcriber's guess). Symbols that are said, such
+   * as % or &, still count.
+   */
+  ignorePunctuation: boolean;
 }
 
 export const DEFAULT_OPTIONS: CompareOptions = {
@@ -22,6 +28,7 @@ export const DEFAULT_OPTIONS: CompareOptions = {
   ignoreFormatting: false,
   ignoreEmpty: true,
   normalizePunctuation: false,
+  ignorePunctuation: false,
 };
 
 export function optionsKey(o: CompareOptions): string {
@@ -32,6 +39,7 @@ export function optionsKey(o: CompareOptions): string {
     o.ignoreFormatting ? 1 : 0,
     o.ignoreEmpty ? 1 : 0,
     o.normalizePunctuation ? 1 : 0,
+    o.ignorePunctuation ? 1 : 0,
   ].join('');
 }
 
@@ -70,6 +78,15 @@ const SCRIPT_NO_SPACES = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\
 const WORDISH = /[\p{L}\p{N}]/u;
 const WS_ONLY = /^[\s\u00a0]+$/;
 const INVISIBLE_RE = new RegExp(`[${INVISIBLE}]`, 'g');
+/** Punctuation that ignorePunctuation leaves out (not the symbols that are said: % ‰ # & @ * / \). */
+const PUNCT = '(?![%‰‱#&@*/\\\\])\\p{P}';
+const PUNCTUATION = new RegExp(`^(?:${PUNCT})+$`, 'u');
+const PUNCTUATION_ALL = new RegExp(PUNCT, 'gu');
+
+/** Text without the punctuation ignorePunctuation leaves out. */
+export function withoutPunctuation(text: string): string {
+  return text.replace(PUNCTUATION_ALL, '');
+}
 
 export function fmtSig(f: Fmt): string {
   let s = '';
@@ -172,6 +189,9 @@ export function tokenizeSpans(spans: readonly Span[], o: CompareOptions): Tokeni
     }
     if (!text) continue;
     const words = splitWords(text, o.granularity);
+    const groupStart = tokens.length;
+    /** Punctuation before this stretch's first token, which joins it (with ignorePunctuation). */
+    let lead = null as { text: string; pieces: Piece[] } | null;
     // Map word ranges back to span pieces.
     let g = 0;
     let gStart = 0; // offset of group[g] in `text`
@@ -196,11 +216,23 @@ export function tokenizeSpans(spans: readonly Span[], o: CompareOptions): Tokeni
         pieces.push({ span: spanIdx, start: pStart, end: pEnd });
         cursor = gStart + pEnd;
       }
+      if (o.ignorePunctuation && PUNCTUATION.test(w)) {
+        // Shown with the token before it (or the next), and left out of its key: compared as if it weren't there.
+        const prev = tokens.length > groupStart ? tokens[tokens.length - 1]! : null;
+        if (prev) {
+          prev.text += w;
+          prev.pieces.push(...pieces);
+        } else lead = { text: (lead?.text ?? '') + w, pieces: [...(lead?.pieces ?? []), ...pieces] };
+        continue;
+      }
       const ws = WS_ONLY.test(w);
       let key = normalizeText(w, o);
       if (!o.ignoreFormatting && !ws) key += '\u0000' + piecesSig(spans, pieces);
-      tokens.push({ key, text: w, pieces, ws, word: !ws && WORDISH.test(w) });
+      tokens.push({ key, text: (lead?.text ?? '') + w, pieces: lead ? [...lead.pieces, ...pieces] : pieces, ws, word: !ws && WORDISH.test(w) });
+      lead = null;
     }
+    // Nothing but punctuation: one token that matches any other such.
+    if (lead) tokens.push({ key: '\u0002', text: lead.text, pieces: lead.pieces, ws: false, word: false });
   }
 
   const comp: number[] = [];

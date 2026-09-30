@@ -2,6 +2,7 @@ import type { Issue } from '../check/check';
 import type { Lang } from '../check/spell';
 import { LANG_NAME } from '../check/spell';
 import { Ico } from '../components/icons';
+import { Segmented } from '../components/ui/segmented';
 import type { Side } from './util';
 import { SIDE_NAME, plural } from './util';
 
@@ -44,13 +45,13 @@ export function CheckMenu({ lang, counts, claude, words, onLang, onClaude, onCla
           </button>
         )}
       </div>
-      <div className="seg cm-lang" role="radiogroup" aria-label="Language">
-        {(Object.keys(LANG_NAME) as Lang[]).map((l) => (
-          <button key={l} type="button" role="radio" aria-checked={lang === l} data-lang={l} onClick={() => onLang(l)}>
-            {LANG_NAME[l]}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        className="text cm-lang"
+        label="Language"
+        value={lang}
+        onChange={onLang}
+        segments={(Object.keys(LANG_NAME) as Lang[]).map((l) => ({ value: l, content: LANG_NAME[l], attrs: { 'data-lang': l } }))}
+      />
       <div className="menu-sep" />
       <div className="menu-title">Claude</div>
       <label className={`cm-switch${claude.available === false ? ' off' : ''}`}>
@@ -117,7 +118,7 @@ const show = (s: string) => (s === ' ' ? 'one space' : s || 'remove');
 
 /** A finding, from a click on its underlined words: what is wrong, and what to write instead. */
 export function IssueCard({ issue, side, suggestions, editable, canAsk, asking, onFix, onIgnore, onAddWord, onAsk }: IssueCardProps) {
-  const kind = issue.source === 'claude' ? 'Claude' : issue.kind === 'spelling' ? 'Spelling' : 'Grammar';
+  const kind = issue.source === 'claude' ? 'Claude' : issue.kind === 'spelling' ? 'Spelling' : issue.kind === 'contract' ? 'Contract check' : 'Grammar';
   return (
     <div className="issue-card" role="dialog" aria-label={`${kind}: ${issue.message}`} id="issue-card">
       <div className="ic-head">

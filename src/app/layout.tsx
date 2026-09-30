@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from 'next/font/google';
 import type { ReactNode } from 'react';
 import '../styles.css';
+import { Offline } from '../components/offline';
 import { THEME_SCRIPT } from '../ui/theme';
 
 // The variables are read by the font tokens in styles.css.
@@ -34,7 +35,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {/* The theme the reader chose, applied before the first paint. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <Offline />
+      </body>
     </html>
   );
 }

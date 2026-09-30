@@ -9,6 +9,7 @@ import type { Side } from '../review/anchor';
 import { blockStream, hashText } from '../review/anchor';
 import type { Ignores, Issue } from './check';
 import { checkText, ignoreKey } from './check';
+import { contractFindings } from './contract';
 import type { Speller } from './spell';
 
 export interface PlacedIssue {
@@ -51,6 +52,7 @@ export function isIgnored(i: Issue, ignores: Ignores): boolean {
  */
 export function placeIssues(cmp: Comparison, sp: Speller, ignores: Ignores, claude: ClaudeFindings): PlacedIssue[] {
   const out: PlacedIssue[] = [];
+  const contract = contractFindings(cmp);
   for (const row of cmp.rows) {
     for (const side of ['a', 'b'] as const) {
       const block = side === 'a' ? row.l : row.r;
@@ -59,7 +61,7 @@ export function placeIssues(cmp: Comparison, sp: Speller, ignores: Ignores, clau
       const text = blockStream(block);
       if (!text) continue;
       const fromClaude = claude[hashText(text)] ?? [];
-      const issues = [...localIssues(text, sp), ...fromClaude].filter((i) => !isIgnored(i, ignores));
+      const issues = [...localIssues(text, sp), ...fromClaude, ...(contract.get(block) ?? [])].filter((i) => !isIgnored(i, ignores));
       for (const issue of issues) out.push({ key: `${side}|${row.key}|${issue.source}|${issue.rule}|${issue.start}|${issue.end}`, side, rowKey: row.key, block, issue });
     }
   }

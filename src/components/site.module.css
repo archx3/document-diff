@@ -210,6 +210,10 @@
 
 /* ---------------------------------------------------------- drop card */
 
+.kinds {
+  margin-bottom: 18px;
+}
+
 .drop {
   display: flex;
   flex-direction: column;
@@ -268,26 +272,40 @@
   font-size: 14px;
 }
 
-.footerBar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 28px;
+.footerGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) repeat(3, minmax(0, 1fr));
+  gap: 32px 28px;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 28px 16px calc(28px + env(safe-area-inset-bottom, 0px));
+  padding: 48px 16px 32px;
 }
 
-.footerBar .brand {
-  font-size: 20px;
+.footerAbout .brand {
+  font-size: 22px;
   color: var(--on-invert);
+}
+
+.footerAbout p {
+  max-width: 300px;
+  margin: 14px 0 0;
+  line-height: 1.55;
+}
+
+.footerTitle {
+  margin: 0 0 4px;
+  color: var(--on-invert);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .footerLinks {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 22px;
-  margin-left: auto;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
 }
 
 .footerLinks a {
@@ -298,6 +316,51 @@
 
 .footerLinks a:hover {
   color: var(--on-invert);
+}
+
+.footerBase {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 18px 16px calc(22px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid color-mix(in srgb, var(--on-invert) 14%, transparent);
+  font-size: 13px;
+}
+
+.footerBase span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ------------------------------------------------ the site's own pages */
+
+.main {
+  flex: 1;
+}
+
+.nav a[aria-current='page'] {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+@media (max-width: 860px) {
+  .footerGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .footerAbout {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 520px) {
+  .footerGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 860px) {

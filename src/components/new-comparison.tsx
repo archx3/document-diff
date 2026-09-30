@@ -3,8 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { Doc } from '../core/model';
-import { ACCEPTED_EXTENSIONS, acceptList, extensionOf, fileFormat, withArticle } from '../formats/extensions';
-import { handOffDocs, takeFiles } from '../lib/handoff';
+import { acceptList, extensionOf, fileFormat, withArticle } from '../formats/extensions';
+import { handOffDocs, takeFiles, takeKind } from '../lib/handoff';
+import type { MediaKind } from '../media/kinds';
+import { MEDIA, kindOf, kindOfName } from '../media/kinds';
+import { KindPicker, acceptFor } from './kind-picker';
 import { noteSource } from '../lib/sources';
 import { useFilePicker, usePageDrop } from './file-drop';
 import { Icon } from './icons';
@@ -22,7 +25,6 @@ interface Problem {
   googleDocId?: string;
 }
 
-const ANY_FILE = acceptList(ACCEPTED_EXTENSIONS);
 const WORKSPACE = '/compare/';
 
 /** Reads a file into a document, or throws an error that says why it can't be compared. */
@@ -31,7 +33,7 @@ async function readDocument(file: File): Promise<{ doc: Doc; words: number }> {
   const doc = await loadFile(file);
   if (!doc.blocks.some((b) => b.type !== 'marker' && !isBlank(b))) throw new LoadError(`"${file.name}" has no text to compare.`);
   noteSource(doc, file);
-  return { doc, words: wordCount(doc) };
+  return { doc, words: kindOf(doc) === 'text' ? wordCount(doc) : 0 };
 }
 
 function upperFirst(s: string): string {
@@ -47,6 +49,8 @@ export function NewComparison() {
   const [a, setA] = useState<Slot>({ status: 'empty' });
   const [b, setB] = useState<Slot>({ status: 'empty' });
   const [problem, setProblem] = useState<Problem | null>(null);
+  /** What is compared, chosen first: it sets which files the pickers offer. */
+  const [kind, setKind] = useState<MediaKind>('text');
   // Each side counts its reads, so a file picked while another is still being read wins.
   const reads = useRef({ a: 0, b: 0 });
 
@@ -76,6 +80,12 @@ export function NewComparison() {
   async function chooseFirst(files: File[]) {
     const [first, second] = files;
     if (!first) return;
+    if (files.length > 2) {
+      setProblem({ side: 'a', message: 'Choose one file, or two: the first version and the other.' });
+      return;
+    }
+    const k = kindOfName(first.name);
+    if (k && k !== kind) setKind(k);
     reads.current.b++;
     setB({ status: 'empty' });
     const slot = await read('a', first);
@@ -102,21 +112,23 @@ export function NewComparison() {
   }
 
   const dragging = usePageDrop((files) => void (a.status === 'ready' ? chooseOther(files) : chooseFirst(files)));
-  const pickFirst = useFilePicker((files) => void chooseFirst(files), ANY_FILE);
-  const pickOther = useFilePicker((files) => void chooseOther(files), format ? acceptList(format.exts) : ANY_FILE);
+  const pickFirst = useFilePicker((files) => void chooseFirst(files), acceptFor(kind), true);
+  const pickOther = useFilePicker((files) => void chooseOther(files), format ? acceptList(format.exts) : acceptFor(kind));
 
   // Files from the landing page are taken once: in development React runs this effect twice.
-  const handed = useRef<File[] | null>(null);
+  const handed = useRef<{ files: File[]; kind: MediaKind | null } | null>(null);
   const start = useEffectEvent((files: File[]) => void chooseFirst(files));
   useEffect(() => {
-    handed.current ??= takeFiles();
-    if (handed.current.length) start(handed.current);
+    handed.current ??= { files: takeFiles(), kind: takeKind() };
+    if (handed.current.kind) setKind(handed.current.kind);
+    if (handed.current.files.length) start(handed.current.files);
     router.prefetch(WORKSPACE);
   }, [router]);
 
   const onlyHint = format
     ? `${upperFirst(format.many)} only${format.exts.length > 1 ? ` (${format.exts.slice(0, 2).map((e) => `.${e}`).join(', ')})` : ''}`
-    : 'Word, Google Docs, PDF, OpenDocument, RTF, EPUB, HTML, Markdown, CSV or text';
+    : MEDIA[kind].formats;
+  const one = kind === 'text' ? 'document' : kind === 'image' ? 'image' : 'recording';
 
   return (
     <main className={styles.main}>
@@ -127,10 +139,20 @@ export function NewComparison() {
         </span>
         Step {step} of 2
       </p>
+      {step === 1 && (
+        <KindPicker
+          value={kind}
+          className={styles.kinds}
+          onChange={(k) => {
+            setKind(k);
+            setProblem(null);
+          }}
+        />
+      )}
       <h1 className={styles.title}>{step === 1 ? 'Choose the first version' : 'Now choose the other version'}</h1>
       <p className={styles.lead}>
         {step === 1 ? (
-          'Start with the document you have. Collate asks for the version to compare it with next.'
+          `Start with the ${one} you have, or choose both versions at once. Collate asks for the other next.`
         ) : (
           <>
             Collate will line it up with <b>{a.status === 'ready' ? a.name : ''}</b> and mark every change.
@@ -147,7 +169,7 @@ export function NewComparison() {
             <h2 className={site.dropTitle}>{a.name}</h2>
             <p className={styles.meta}>
               <span className="badge">{format?.name ?? 'Document'}</span>
-              <span>{a.words.toLocaleString()} words</span>
+              {kind === 'text' && <span>{a.words.toLocaleString()} words</span>}
             </p>
             <button type="button" className={`${site.pill} ${site.secondary} ${site.small}`} onClick={pickFirst.open}>
               Choose a different file
@@ -168,6 +190,7 @@ export function NewComparison() {
                   <Icon name="upload" />
                   Choose a file
                 </button>
+                <p className={site.dropText}>Choose two to compare them straight away.</p>
                 <p className={site.hint}>{onlyHint}</p>
               </>
             )}
