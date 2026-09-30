@@ -153,7 +153,8 @@ test('the kind of file is chosen first: its files only, one or both at once', as
   await page.getByRole('button', { name: 'Choose one or two files' }).click();
   await (await chooser).setFiles(['tests/fixtures/speech-v1.wav', 'tests/fixtures/speech-v2.m4a']);
   await expect(page).toHaveURL(/\/compare\/$/);
-  await expect(page.locator('.slot-name')).toHaveText(['speech-v1.wav', 'speech-v2.m4a']);
+  // A recording's name is over its track.
+  await expect(page.locator('.at-name')).toHaveText(['speech-v1.wav', 'speech-v2.m4a']);
   await expect(page.locator('#toolbar')).toHaveAttribute('data-kind', 'audio');
 });
 

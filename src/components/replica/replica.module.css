@@ -1,6 +1,8 @@
 /* The replicas of the workspace in the guides and help: the real workspace's
    colours and marks (src/styles.css) at a smaller size, with regions that a
-   walkthrough outlines. */
+   walkthrough outlines. The picture and recording replicas share the buttons,
+   toolbar and heads below; the document replica has its own, drawn as the
+   workspace's are. */
 
 .frame {
   position: relative;
@@ -64,8 +66,10 @@
   color: var(--accent);
 }
 
+/* The container the replicas' layouts query, as the workspace's queries its screen. */
 .window {
   position: relative;
+  container-type: inline-size;
   background: var(--desk);
 }
 
@@ -125,33 +129,13 @@
   }
 }
 
-/* --------------------------------------------------------- app bar */
-
-.appbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  background: var(--paper);
-  border-bottom: 1px solid var(--line);
-  white-space: nowrap;
-}
-
-.brand {
-  margin-right: 8px;
-  font: 600 16px/1 var(--font-doc);
-}
-
-.brand i {
-  color: var(--teal);
-  font-size: 1.2em;
-}
+/* ---------------------------------------- picture and recording tools */
 
 .spacer {
   flex: 1;
 }
 
-/* A button of the replica's app bar or toolbar. */
+/* A button of the picture and recording replicas. */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -217,41 +201,6 @@
 
 .toolbar[data-match] {
   background: var(--b-tint);
-}
-
-.stats {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  color: var(--ink-2);
-  font-size: 11.5px;
-}
-
-.stats span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.stats span::before {
-  content: '';
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: var(--chg);
-}
-
-.stats [data-k='del']::before {
-  background: var(--a);
-}
-
-.stats [data-k='ins']::before {
-  background: var(--b);
-}
-
-.stats [data-k='match']::before {
-  background: var(--b);
-  border-radius: 50%;
 }
 
 .seg {
@@ -355,138 +304,500 @@
   font-size: 10px;
 }
 
-.counter {
-  align-self: center;
-  justify-self: center;
-  color: var(--ink-2);
-  font: 11px/1 var(--font-mono);
+/* ------------------------------------------------ the document workspace */
+
+/* The document replica is drawn as the workspace is (src/styles.css), a little smaller, and like
+   it, it rearranges itself for the room it has (the queries are on the window, .window). */
+
+/* The app bar: the name and what it does, and the workspace's own buttons. */
+.appbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
 }
 
-.counter b {
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.brandWord {
+  font: 600 16px/1 var(--font-doc);
+  letter-spacing: 0.005em;
+}
+
+.brandWord i {
+  margin-right: 0.02em;
+  color: var(--teal);
+  font-size: 1.22em;
+}
+
+.brandTag {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.appActions {
+  display: flex;
+  gap: 2px;
+}
+
+/* The toolbar: what changed on the left, how it is shown in the middle, and on the right, editing
+   and getting it out, then the list of changes. */
+.tbar {
+  display: grid;
+  grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
+  grid-template-areas: 'left middle right';
+  align-items: center;
+  gap: 6px 14px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  transition: background-color 0.2s;
+}
+
+/* A and B match: the toolbar says so in green. */
+.tbar[data-match] {
+  background: var(--ok-tint);
+  border-bottom-color: var(--ok-line);
+}
+
+.tcol {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tcol[data-col='left'] {
+  grid-area: left;
+}
+
+.tcol[data-col='middle'] {
+  grid-area: middle;
+}
+
+.tcol[data-col='right'] {
+  grid-area: right;
+  justify-self: end;
+  gap: 12px;
+}
+
+.tgroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+/* A tool: an icon, with no border or background until it is pointed at. */
+.tool {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition:
+    background-color 0.12s,
+    border-color 0.12s,
+    color 0.12s;
+}
+
+/* One that opens a menu, with a small chevron after its icon. */
+.tool[data-menu] {
+  width: auto;
+  padding: 0 3px 0 6px;
+}
+
+.tool[data-menu] svg + svg {
+  opacity: 0.6;
+}
+
+.tool:hover:not(:disabled) {
+  background: var(--line-2);
+  color: var(--ink);
+}
+
+.tool:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.tool[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.tool[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+
+/* The spelling menu's chevron, beside its toggle. */
+.tool.chev {
+  width: 14px;
+}
+
+.textTool {
+  height: 26px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font: 500 11.5px/1 var(--font-ui);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.textTool:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.tsep {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  border: 0;
+  background: var(--line);
+}
+
+/* Side by side or unified: two segments in a well, the chosen one raised. */
+.vseg {
+  display: inline-flex;
+  gap: 2px;
+  margin-right: 3px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--well);
+}
+
+.vseg button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.vseg button:hover {
+  color: var(--ink);
+}
+
+.vseg button[aria-checked='true'] {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 1px 2px rgba(22, 56, 75, 0.08);
+}
+
+/* How many paragraphs changed, shown while the (i) is pointed at. */
+.statsCard {
+  position: absolute;
+  z-index: 7;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  gap: 5px;
+  min-width: 140px;
+  padding: 8px 12px 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+.statsHead {
+  color: var(--ink-3);
+  font: 600 9.5px/1.2 var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.stat b {
+  min-width: 1.5ch;
+  color: var(--ink);
+  font-weight: 600;
+  text-align: right;
+}
+
+.stat::before {
+  content: '';
+  flex: none;
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--chg);
+}
+
+.stat[data-k='del']::before {
+  background: var(--a);
+}
+
+.stat[data-k='ins']::before {
+  background: var(--b);
+}
+
+.stat[data-k='ok'] {
+  color: var(--ok);
+  font-weight: 500;
+}
+
+.stat[data-k='ok']::before {
+  display: none;
+}
+
+/* ---------------------------------------------------- column heads */
+
+.colheads {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--gut) minmax(0, 1fr);
+  padding: 10px 12px 0;
+}
+
+.slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 8px 7px 6px;
+  border: 1px solid var(--line);
+  border-radius: 10px 10px 0 0;
+  background: var(--paper);
+}
+
+.slot .siglum {
+  width: 1.1em;
+  text-align: center;
+}
+
+.slotMain {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.slotName {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slotMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  color: var(--ink-3);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fmt {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--line-2);
+  color: var(--ink-2);
+  font: 500 9px/1 var(--font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.edited {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.slotActions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+/* Replace and Export: small bordered buttons. */
+.sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 500 11px/1 var(--font-ui);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sm:hover {
+  border-color: var(--ink-3);
+}
+
+/* Export, once something has been copied into that document. */
+.sm[data-primary] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.sm[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+
+/* Which change is current, between the heads, above the ruler. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  justify-self: center;
+  min-height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--paper);
+  color: var(--ink-3);
+  font: 10.5px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.pill b {
   color: var(--ink);
   font-weight: 500;
 }
 
-/* ----------------------------------------------------- the documents */
+.pillSep {
+  padding: 0 2px;
+}
+
+.pill[data-none] {
+  padding: 0 5px;
+  border-color: var(--ok-line);
+  background: var(--ok-tint);
+  color: var(--ok);
+}
+
+/* Unified: the heads are cards above the one column. */
+.colheads[data-unified] {
+  grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr);
+  padding-bottom: 8px;
+}
+
+.colheads[data-unified] .slot {
+  border-radius: 10px;
+}
+
+/* ------------------------------------------------------ the documents */
 
 .body {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-height: 330px;
 }
 
 .body[data-panel] {
-  grid-template-columns: minmax(0, 1fr) 200px;
+  grid-template-columns: minmax(0, 1fr) 210px;
 }
 
-.sheets {
-  padding: 0 12px 16px;
+/* The documents and their heads: the container their layout queries, since the list beside them
+   takes some of the window's width. */
+.stage {
   min-width: 0;
+  padding-bottom: 14px;
+  container-type: inline-size;
 }
 
-.row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr);
-  transition: background-color 0.3s;
+/* Review mode's margin, outside each document, with its marks. */
+.colheads[data-review],
+.egrid[data-review],
+.agrid[data-review],
+.ugrid[data-review] {
+  --mg: 26px;
 }
 
-.cell {
+.colheads[data-review] {
+  padding-inline: calc(12px + var(--mg));
+}
+
+.para,
+.cell,
+.ucell {
+  position: relative;
   min-width: 0;
-  padding: 4px 12px;
+  padding: 3px 14px;
   border-inline: 1px solid var(--line);
   background: var(--paper);
-  font: 12.5px/1.5 var(--font-doc);
+  font: 12.5px/1.55 var(--font-doc);
   overflow-wrap: anywhere;
+  transition:
+    background-color 0.3s,
+    border-color 0.3s;
 }
 
-.row:last-child .cell {
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 12px;
-}
-
-.row[data-k='mod'] .cell[data-side='a'],
-.row[data-k='del'] .cell[data-side='a'] {
-  background: var(--a-tint);
-  box-shadow: inset 3px 0 0 var(--chg);
-}
-
-.row[data-k='del'] .cell[data-side='a'] {
-  box-shadow: inset 3px 0 0 var(--a);
-}
-
-.row[data-k='mod'] .cell[data-side='b'],
-.row[data-k='ins'] .cell[data-side='b'] {
-  background: var(--b-tint);
-  box-shadow: inset -3px 0 0 var(--chg);
-}
-
-.row[data-k='ins'] .cell[data-side='b'] {
-  box-shadow: inset -3px 0 0 var(--b);
-}
-
-.row[data-current] .cell {
-  border-color: var(--accent);
-}
-
-.row[data-copied] .cell {
-  animation: copied 0.9s ease-out;
-}
-
-@keyframes copied {
-  from {
-    background: var(--accent-soft);
-  }
-}
-
-.gut {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 2px;
-  padding-top: 3px;
-}
-
-.row[data-current] .gut {
-  background: linear-gradient(var(--accent), var(--accent)) center / 2px 100% no-repeat;
-}
-
-.act {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  background: var(--desk);
-  color: var(--ink-2);
-  cursor: pointer;
-}
-
-.act:hover {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.row[data-current] .act {
-  color: var(--accent);
-}
-
+.para del,
+.para ins,
 .cell del,
-.cell ins {
-  text-decoration: none;
-  border-radius: 3px;
+.cell ins,
+.ucell del,
+.ucell ins {
   padding: 1px 0;
+  border-radius: 3px;
+  text-decoration: none;
   cursor: pointer;
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
 
-.cell del {
+.para del,
+.cell del,
+.ucell del {
   background: var(--a-mark);
 }
 
-.cell ins {
+.para ins,
+.cell ins,
+.ucell ins {
   background: var(--b-mark);
 }
 
@@ -516,13 +827,361 @@
   color: var(--ink-2);
 }
 
+/* A changed paragraph: tinted, with a bar on its outer edge (blue where it changed, A's
+   terracotta or B's green where only that document has it). */
+.para[data-side='a'][data-k='mod'],
+.row[data-k='mod'] .cell[data-side='a'] {
+  background: var(--a-tint);
+  box-shadow: inset 3px 0 0 var(--chg);
+}
+
+.para[data-side='a'][data-k='del'],
+.row[data-k='del'] .cell[data-side='a'] {
+  background: var(--a-tint);
+  box-shadow: inset 3px 0 0 var(--a);
+}
+
+.para[data-side='b'][data-k='mod'],
+.row[data-k='mod'] .cell[data-side='b'] {
+  background: var(--b-tint);
+  box-shadow: inset -3px 0 0 var(--chg);
+}
+
+.para[data-side='b'][data-k='ins'],
+.row[data-k='ins'] .cell[data-side='b'] {
+  background: var(--b-tint);
+  box-shadow: inset -3px 0 0 var(--b);
+}
+
+.para[data-current],
+.row[data-current] .cell,
+.urow[data-current] .ucell {
+  border-color: var(--accent);
+}
+
+.para[data-copied],
+.row[data-copied] .cell,
+.ublock[data-copied] .ucell {
+  animation: copied 0.9s ease-out;
+}
+
+@keyframes copied {
+  from {
+    background: var(--accent-soft);
+  }
+}
+
+/* The bottom of each sheet. */
+.endcap {
+  display: block;
+  height: 14px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: var(--paper);
+}
+
+/* Unchanged paragraphs folded away. */
+.foldSide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 5px 0;
+  padding: 4px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 7px;
+  color: var(--ink-3);
+  font-size: 10.5px;
+}
+
+/* The arrows beside a change: A's » sends its version to B, B's « sends B's to A. */
+.act {
+  display: grid;
+  place-items: center;
+  width: var(--act);
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition:
+    background-color 0.12s,
+    color 0.12s;
+}
+
+.act:hover {
+  background: var(--line-2);
+  color: var(--ink);
+}
+
+.zone[data-current] .act,
+.row[data-current] .act,
+.urow[data-current] .act {
+  color: var(--accent);
+}
+
+.lnum {
+  z-index: 2;
+  overflow: hidden;
+  color: var(--ink-3);
+  font: 500 9.5px/20px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.lnum[data-current],
+.row[data-current] .lnum,
+.urow[data-current] .lnum {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Side by side with connection bands: each document runs on in its own column, and bands join
+   its changes to the other's across the gutter, under the ruler. */
+.egrid {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--gut) minmax(0, 1fr);
+  align-items: start;
+  margin: 0 12px;
+}
+
+.ecol {
+  min-width: 0;
+}
+
+.egrid[data-review] .ecol[data-col='a'] {
+  padding-left: var(--mg);
+}
+
+.egrid[data-review] .ecol[data-col='b'] {
+  padding-right: var(--mg);
+}
+
+/* Where the other document has a paragraph this one doesn't: a line across the sheet, in the
+   colour of what is missing here. */
+.gap {
+  position: relative;
+  height: 0;
+}
+
+.gap::after {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: -1px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--chg);
+}
+
+.gap[data-k='ins']::after {
+  background: var(--b);
+}
+
+.gap[data-k='del']::after {
+  background: var(--a);
+}
+
+.egut {
+  position: relative;
+  align-self: stretch;
+}
+
+.bands {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.band {
+  fill: var(--chg);
+  fill-opacity: 0.14;
+  pointer-events: visiblePainted;
+  cursor: pointer;
+  transition: fill-opacity 0.12s;
+}
+
+.band[data-k='del'] {
+  fill: var(--a);
+}
+
+.band[data-k='ins'] {
+  fill: var(--b);
+}
+
+.band:hover {
+  fill-opacity: 0.2;
+}
+
+.band[data-current] {
+  fill-opacity: 0.24;
+}
+
+.bandEdge {
+  fill: none;
+  stroke: var(--chg);
+  stroke-width: 1;
+  stroke-opacity: 0.55;
+}
+
+.bandEdge[data-k='del'] {
+  stroke: var(--a);
+}
+
+.bandEdge[data-k='ins'] {
+  stroke: var(--b);
+}
+
+.bandEdge[data-current] {
+  stroke-opacity: 1;
+  stroke-width: 1.5;
+}
+
+/* The arrows of one change, level with its paragraphs. */
+.zone {
+  position: absolute !important;
+  z-index: 2;
+  right: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.zone .act {
+  position: absolute;
+  pointer-events: auto;
+}
+
+/* The ruler in the middle of the gutter, with a mark for each change, and a minimap each side of
+   it when they are on. */
+.ruler {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 4px;
+  border-radius: 6px;
+  background: var(--line-2);
+  pointer-events: none;
+}
+
+.rmark {
+  position: absolute;
+  z-index: 1;
+  right: 2px;
+  left: 2px;
+  border-radius: 2px;
+  background: var(--chg);
+  opacity: 0.9;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.rmark[data-k='del'] {
+  background: var(--a);
+}
+
+.rmark[data-k='ins'] {
+  background: var(--b);
+}
+
+.rmark[data-current] {
+  right: -1px;
+  left: -1px;
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* The part of the documents on screen, across the ruler: in the replica, all of them. */
+.rview {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  left: -3px;
+  border: 1px solid var(--ink-3);
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.mini {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  bottom: 4px;
+  border-radius: 3px;
+  background: var(--paper);
+  box-shadow: 0 0 0 1px var(--line);
+  pointer-events: none;
+}
+
+.mini i {
+  position: absolute;
+  right: 3px;
+  left: 3px;
+  background: repeating-linear-gradient(var(--line-strong) 0 1.5px, transparent 1.5px 4px);
+}
+
+.mini i[data-k='a'] {
+  background: repeating-linear-gradient(var(--a-mark) 0 1.5px, transparent 1.5px 4px);
+}
+
+.mini i[data-k='b'] {
+  background: repeating-linear-gradient(var(--b-mark) 0 1.5px, transparent 1.5px 4px);
+}
+
+/* Side by side without the bands: the paragraphs lined up in rows, with the arrows between. */
+.agrid {
+  position: relative;
+  margin: 0 12px;
+}
+
+.agrid[data-review] {
+  padding-inline: var(--mg);
+}
+
+.row,
+.foldRow,
+.endcaps {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--gut) minmax(0, 1fr);
+}
+
+.foldRow > :last-child,
+.endcaps > :last-child {
+  grid-column: 3;
+}
+
+.gut {
+  display: grid;
+  grid-template-columns: var(--num) var(--act) minmax(0, 1fr) var(--act) var(--num);
+  align-items: start;
+  padding-top: 3px;
+}
+
+/* The ruler and minimaps over the middle of the gutter. */
+.overlay {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc((100% - var(--gut)) / 2);
+  width: var(--gut);
+  pointer-events: none;
+}
+
+/* Placeholder where one side has nothing. */
 .missing {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: calc(100% + 8px);
+  height: calc(100% + 6px);
   min-height: 24px;
-  margin: -4px -12px;
+  margin: -3px -14px;
   background: repeating-linear-gradient(-45deg, var(--hatch) 0 1px, transparent 1px 7px);
 }
 
@@ -536,124 +1195,281 @@
   text-transform: uppercase;
 }
 
-/* Unchanged paragraphs folded away. */
-.fold {
-  grid-column: 1 / -1;
-  padding: 2px 0;
-  border-inline: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink-3);
-  font: 10px/1.6 var(--font-mono);
-  text-align: center;
+/* One column: unchanged paragraphs once, and where they differ, A's version above B's, each with
+   its line numbers and arrow in a gutter on the left. */
+.ugrid {
+  --ugut: calc(2 * var(--num) + var(--act) + 8px);
+  position: relative;
+  margin: 0 12px;
 }
 
-/* One column: A's version above B's wherever they differ. */
-.uni {
-  padding: 4px 14px;
-  border-inline: 1px solid var(--line);
+.ugrid[data-review] {
+  padding-right: var(--mg);
+}
+
+.urow,
+.ufold,
+.utop {
+  display: grid;
+  grid-template-columns: var(--ugut) minmax(0, 1fr);
+}
+
+.utop::after {
+  content: '';
+  grid-column: 2;
+  height: 10px;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
   background: var(--paper);
-  font: 12.5px/1.5 var(--font-doc);
 }
 
-.uni[data-side='a'] {
+.ufold > *,
+.ugrid > .endcap {
+  grid-column: 2;
+}
+
+.ugrid > .endcap {
+  margin-left: var(--ugut);
+}
+
+.ugut {
+  display: grid;
+  grid-template-columns: var(--num) var(--num) var(--act);
+  align-items: start;
+  padding: 3px 4px 0 4px;
+}
+
+/* Up into A, down into B. */
+.ugut .act svg {
+  transform: rotate(90deg);
+}
+
+.ucell[data-side] {
+  padding-left: 24px;
+}
+
+.ucell[data-side]::before {
+  content: attr(data-side);
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  color: var(--accent);
+  font: italic 600 12px/1 var(--font-doc);
+  text-transform: uppercase;
+}
+
+.urow[data-side='a'] .ucell {
   background: var(--a-tint);
+  box-shadow: inset 3px 0 0 var(--chg);
+}
+
+.urow[data-side='a'][data-k='del'] .ucell {
   box-shadow: inset 3px 0 0 var(--a);
 }
 
-.uni[data-side='b'] {
+.urow[data-side='b'] .ucell {
   background: var(--b-tint);
+  box-shadow: inset 3px 0 0 var(--chg);
+}
+
+.urow[data-side='b'][data-k='ins'] .ucell {
   box-shadow: inset 3px 0 0 var(--b);
 }
 
-.uni[data-current] {
-  border-color: var(--accent);
+.urow .ucell:has(> .missing) {
+  background: var(--paper);
+  box-shadow: none;
 }
 
-.uni del,
-.uni ins {
-  text-decoration: none;
-  border-radius: 3px;
+.ucell .missing {
+  margin-left: -24px;
 }
 
-.uni del {
-  background: var(--a-mark);
+/* Review mode: the margin beside the current change holds its note's mark, and the note shows
+   beside it. */
+.mchip {
+  position: absolute;
+  top: 3px;
+  right: calc(2px - var(--mg));
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 20px;
+  border-radius: 6px;
+  color: var(--accent);
 }
 
-.uni ins {
-  background: var(--b-mark);
+.note {
+  position: absolute !important;
+  z-index: 5;
+  top: 26px;
+  right: calc(4px - var(--mg));
+  width: 180px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--amber);
+  border-radius: 10px;
+  background: var(--paper);
+  box-shadow: 0 16px 30px -16px rgba(22, 56, 75, 0.45);
+  font: 11.5px/1.4 var(--font-ui);
 }
 
-/* ---------------------------------------------- the list of changes */
+.note b {
+  display: block;
+  color: var(--amber);
+  font-size: 10.5px;
+}
 
+/* ------------------------------------------------ the list of changes */
+
+/* As tall as the documents beside it (it adds nothing to their height), its cards scrolling. */
 .panel {
   display: flex;
   flex-direction: column;
-  gap: 6px;
   min-width: 0;
-  margin: 10px 12px 16px 0;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--paper);
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  contain: size;
 }
 
 .panelHead {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 6px 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.panelHead .tool {
+  margin-left: auto;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 7px;
   color: var(--ink-3);
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font: 600 12px/1 var(--font-ui);
+}
+
+.tab[aria-current] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.countPill {
+  padding: 2px 6px;
+  border-radius: 99px;
+  background: var(--line-2);
+  font: 500 10px/1 var(--font-mono);
+}
+
+.decideBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-2);
+  font-size: 11px;
+}
+
+.progress {
+  flex: 1 1 100%;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line);
+}
+
+.progress > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s;
+}
+
+.cards {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  padding: 10px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.card {
+  position: relative;
+  padding: 8px 10px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--paper);
+  font: 11.5px/1.4 var(--font-ui);
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+
+.card:hover {
+  border-color: var(--ink-3);
+}
+
+.card[data-current] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.card[data-decided] > :not(.decide) {
+  opacity: 0.72;
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding-right: 50px;
+  color: var(--ink-3);
+  font: 600 9.5px/1.3 var(--font-ui);
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
-.item {
-  display: grid;
-  gap: 4px;
-  padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  cursor: pointer;
+.cardN {
+  color: var(--ink-2);
 }
 
-.item:hover {
-  background: var(--hover);
-}
-
-.item[data-current] {
-  border-color: var(--teal);
-  background: var(--accent-soft);
-}
-
-.itemText {
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  font-size: 11.5px;
-  line-height: 1.35;
-}
-
-.itemMeta {
+.cardCounts {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ink-3);
-  font: 10px/1 var(--font-mono);
+  margin-left: auto;
+  font: 500 10.5px/1 var(--font-mono);
+  letter-spacing: 0;
 }
 
-.itemMeta [data-k='del'] {
+.cardCounts [data-k='del'] {
   color: var(--a);
 }
 
-.itemMeta [data-k='ins'] {
+.cardCounts [data-k='ins'] {
+  margin-left: 6px;
+  padding-left: 6px;
+  border-left: 1px solid var(--line);
   color: var(--b);
 }
 
 .decide {
-  display: inline-flex;
+  position: absolute !important;
+  top: 6px;
+  right: 6px;
+  display: flex;
   gap: 3px;
-  margin-left: auto;
 }
 
 .decide button {
@@ -662,11 +1478,16 @@
   width: 20px;
   height: 20px;
   padding: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: 5px;
   background: var(--paper);
-  color: var(--ink-2);
+  color: var(--ink-3);
   cursor: pointer;
+}
+
+.decide button:hover {
+  border-color: var(--ink-3);
+  color: var(--ink);
 }
 
 .decide button[aria-pressed='true'][data-v='accept'] {
@@ -681,77 +1502,259 @@
   color: var(--a);
 }
 
+.cardLine {
+  display: -webkit-box;
+  margin-top: 5px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  color: var(--ink-2);
+  font: 11.5px/1.45 var(--font-doc);
+  overflow-wrap: anywhere;
+}
+
+.cardLine + .cardLine {
+  margin-top: 2px;
+}
+
+.cardLine del,
+.cardLine ins {
+  padding: 1px;
+  border-radius: 3px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.cardLine del {
+  background: var(--a-mark);
+}
+
+.cardLine ins {
+  background: var(--b-mark);
+}
+
 .panelFoot {
   margin-top: auto;
+  padding: 8px 10px 10px;
   color: var(--ink-3);
   font-size: 10.5px;
 }
 
-/* ------------------------------------------------- menus and cards */
-
-.menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 6;
-  width: 220px;
-  padding: 5px;
-  border: 1px solid var(--line-2);
-  border-radius: 12px;
-  background: var(--paper);
-  box-shadow: 0 24px 40px -20px rgba(22, 56, 75, 0.5);
-  font-size: 12px;
-  text-align: left;
-}
-
-.menu p {
-  margin: 0;
-  padding: 6px 8px;
-  border-radius: 7px;
-}
-
-.menu p[data-on] {
-  background: var(--accent-soft);
-}
-
-.menu small {
-  display: block;
-  color: var(--ink-3);
-  font-size: 10.5px;
-}
-
-.menu .menuTitle {
-  color: var(--ink-3);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
+/* ----------------------------------------------------------- menus */
 
 .anchor {
   position: relative;
 }
 
-.note {
+.menu {
   position: absolute;
-  right: -6px;
-  top: 4px;
-  z-index: 5;
-  width: 170px;
-  padding: 8px 10px;
+  z-index: 8;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  width: 230px;
+  padding: 5px;
   border: 1px solid var(--line-2);
-  border-left: 3px solid var(--amber);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--paper);
-  box-shadow: 0 16px 30px -16px rgba(22, 56, 75, 0.45);
-  font: 11.5px/1.4 var(--font-ui);
-  transform: translateX(100%);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  text-align: left;
+  white-space: normal;
 }
 
-.note b {
+.menuTitle {
+  margin: 0;
+  padding: 6px 8px 3px;
+  color: var(--ink-3);
+  font: 700 9.5px/1.2 var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink);
+  font: 500 12px/1.3 var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+}
+
+p.mi {
   display: block;
-  color: var(--amber);
+  cursor: default;
+}
+
+.mi:hover,
+.mi[data-on] {
+  background: var(--accent-soft);
+}
+
+.mi svg {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.mi kbd {
+  margin-left: auto;
+  color: var(--ink-3);
+  font: 10px/1 var(--font-mono);
+}
+
+.mi small {
+  display: block;
+  color: var(--ink-3);
   font-size: 10.5px;
+  font-weight: 400;
+}
+
+/* ------------------------------------------- the document replica, narrower */
+
+/* The window's width: the app bar, the toolbar and the list. No room for the toolbar's three
+   columns in a row: the changes and editing share the first row, and the view is centred on the
+   second (as in the workspace on a narrow screen). */
+@container (max-width: 880px) {
+  .tbar {
+    grid-template-columns: minmax(max-content, 1fr) auto;
+    grid-template-areas:
+      'left right'
+      'middle middle';
+  }
+
+  .tcol[data-col='middle'] {
+    justify-self: center;
+  }
+}
+
+@container (max-width: 760px) {
+  .brandTag {
+    display: none;
+  }
+}
+
+/* Too narrow to give the documents room beside it: the list covers them, as in the workspace. */
+@container (max-width: 640px) {
+  .body[data-panel] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .panel {
+    position: absolute !important;
+    z-index: 9;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(250px, 100%);
+    box-shadow: var(--shadow);
+  }
+}
+
+@container (max-width: 560px) {
+  .opt,
+  .pages {
+    display: none;
+  }
+}
+
+/* A phone: the edit group goes to a row of its own, its menus by their icons. */
+@container (max-width: 440px) {
+  .tbar {
+    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-areas:
+      'left middle'
+      'right right';
+  }
+
+  .tcol[data-col='middle'] {
+    justify-self: end;
+  }
+
+  .tool[data-menu] {
+    width: 26px;
+    padding: 0;
+  }
+
+  .tool[data-menu] svg + svg {
+    display: none;
+  }
+}
+
+/* The documents' width (.stage): the heads and the sheets. Replace and Export by their icons. */
+@container (max-width: 820px) {
+  .sm {
+    width: 24px;
+    padding: 0;
+  }
+
+  /* Hidden from sight, not from screen readers. */
+  .sm span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@container (max-width: 540px) {
+  .colheads {
+    padding: 8px 8px 0;
+  }
+
+  .colheads[data-review] {
+    padding-inline: calc(8px + var(--mg));
+  }
+
+  .egrid,
+  .agrid,
+  .ugrid {
+    margin: 0 8px;
+  }
+
+  .colheads[data-review],
+  .egrid[data-review],
+  .agrid[data-review],
+  .ugrid[data-review] {
+    --mg: 22px;
+  }
+
+  .slot {
+    gap: 6px;
+  }
+
+  .slotMeta > :not(.fmt):not(.edited) {
+    display: none;
+  }
+
+  .para,
+  .cell,
+  .ucell {
+    padding: 3px 9px;
+    font-size: 11px;
+  }
+
+  .missing {
+    margin: -3px -9px;
+  }
+
+  .note {
+    width: 150px;
+  }
+}
+
+@container (max-width: 400px) {
+  .slotActions > button:first-child {
+    display: none;
+  }
 }
 
 /* ----------------------------------------------------------- images */
@@ -1080,38 +2083,8 @@
     display: none !important;
   }
 
-  .body[data-panel] {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .panel {
-    margin: 0 12px 16px;
-  }
-
-  .row,
   .heads {
     grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr);
-  }
-
-  .gut {
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .cell {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
-
-  .missing {
-    margin: -4px -8px;
-  }
-
-  .note {
-    right: 4px;
-    top: auto;
-    bottom: calc(100% + 4px);
-    transform: none;
   }
 
   .address {

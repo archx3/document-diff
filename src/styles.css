@@ -565,7 +565,9 @@ a.brand-word {
    editing on the right. */
 .toolbar {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  /* The middle is centred while there is room; short of that it moves aside rather than run
+     over the tools either side. */
+  grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
   grid-template-areas: 'left middle right';
   align-items: center;
   gap: 8px 20px;
@@ -1273,6 +1275,32 @@ a.brand-word {
   display: flex;
   gap: 6px;
   flex: none;
+}
+
+/* Beside the list of changes, a head can be too narrow for the buttons' words as well as the
+   document's name and facts: the buttons go to their icons (each head is the container). */
+.colhead.a,
+.colhead.b {
+  container-type: inline-size;
+}
+
+@media (min-width: 1100px) {
+  @container (max-width: 420px) {
+    .slot-actions .btn {
+      width: 28px;
+      padding: 0;
+    }
+
+    /* Hidden from sight, not from screen readers. */
+    .slot-actions .btn > span {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+  }
 }
 
 /* -------------------------------------------------------------- rows */
@@ -4640,7 +4668,20 @@ ins.chg .obj-img {
 }
 
 /* No room for three columns in a row: the changes and editing share the first row, and the view
-   is centred on the second. */
+   is centred on the second. The text tools need the most room, so they go to two rows sooner. */
+@media (max-width: 1140px) {
+  .toolbar[data-kind='text'] {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'left right'
+      'middle middle';
+  }
+
+  .toolbar[data-kind='text'] .tcol.middle {
+    justify-self: center;
+  }
+}
+
 @media (max-width: 1000px) {
   .toolbar {
     grid-template-columns: 1fr auto;

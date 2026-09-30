@@ -26,7 +26,10 @@ const STEPS: Step[] = [
     focus: 'word',
     body: (
       <>
-        <p>Words only in A are red, and words only in B are green. A blue bar down the side marks a changed paragraph, and a hatched block marks a paragraph one side doesn’t have.</p>
+        <p>
+          Words only in A are red, and words only in B are green. A blue bar down the side marks a changed paragraph. Where one document has a paragraph the other doesn’t, a line across the
+          other marks where it would go (a hatched block, with connection bands off).
+        </p>
         <p>Click a marked word to copy just that edit to the other side. Try it on the replica.</p>
       </>
     ),
@@ -45,7 +48,10 @@ const STEPS: Step[] = [
     focus: 'copy',
     body: (
       <>
-        <p>The arrows beside the current change copy a whole paragraph: » makes B read like A, « makes A read like B. A copied paragraph brings its formatting, links and pictures along.</p>
+        <p>
+          The arrows beside each change copy the whole of it across, however many paragraphs it runs to: » makes B read like A, « makes A read like B. A copied paragraph brings its
+          formatting, links and pictures along.
+        </p>
         <p>
           <kbd>Alt</kbd>+<kbd>→</kbd> and <kbd>Alt</kbd>+<kbd>←</kbd> copy the current change without the mouse.
         </p>
@@ -79,7 +85,10 @@ const STEPS: Step[] = [
         <p>
           <b>Side by side</b> keeps each document in its own column. <b>Unified</b> (<kbd>V</kbd>) shows one column, with A’s version above B’s wherever they differ; on a phone it is the only view.
         </p>
-        <p>In the full workspace you can also turn on connection bands, a minimap and line numbers.</p>
+        <p>
+          Side by side, <b>connection bands</b> (<kbd>B</kbd>) join each change across the gutter while each document runs on unbroken; turn them off to line the paragraphs up in rows. A{' '}
+          <b>minimap</b> (<kbd>M</kbd>) and <b>line numbers</b> (<kbd>L</kbd>) can go in the gutter too.
+        </p>
       </>
     ),
   },

@@ -16,7 +16,8 @@ test('a sample recording pair opens in the audio workspace', async ({ page }) =>
   await page.goto('/samples/');
   await page.getByRole('region', { name: 'Audio' }).getByRole('listitem').filter({ hasText: 'A short tune' }).getByRole('button', { name: 'Open the comparison' }).click();
   await expect(page).toHaveURL(/\/compare\/$/);
-  await expect(page.locator('.slot-name')).toHaveText(['melody-v1.wav', 'melody-v2.wav']);
+  // A recording's name is over its track.
+  await expect(page.locator('.at-name')).toHaveText(['melody-v1.wav', 'melody-v2.wav']);
   await expect(page.locator('#toolbar')).toHaveAttribute('data-kind', 'audio');
 });
 
@@ -33,14 +34,14 @@ test('a walkthrough step points at its part of the replica, and the replica work
   await page.getByRole('button', { name: 'Copy a change across' }).click();
   await expect(replica.locator('[data-region="copy"][data-on]')).toBeVisible();
   // Clicking another part of the replica shows its step.
-  await replica.getByRole('button', { name: 'List of changes' }).click();
-  await expect(page.getByRole('button', { name: 'The list of changes' })).toHaveAttribute('aria-expanded', 'true');
+  await replica.getByRole('button', { name: 'List of changes', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^\d+ The list of changes$/ })).toHaveAttribute('aria-expanded', 'true');
   // Copying a change leaves one fewer.
-  await expect(replica).toContainText('5 changed');
-  await replica.getByRole('button', { name: "Use A's version in B" }).first().click();
-  await expect(replica).toContainText('4 changed');
+  await expect(replica).toContainText('0 of 6 decided');
+  await replica.getByRole('button', { name: 'Use A’s version in B' }).first().click();
+  await expect(replica).toContainText('0 of 5 decided');
   await replica.getByRole('button', { name: 'Undo' }).click();
-  await expect(replica).toContainText('5 changed');
+  await expect(replica).toContainText('0 of 6 decided');
 });
 
 test('the picture replica switches modes', async ({ page }) => {

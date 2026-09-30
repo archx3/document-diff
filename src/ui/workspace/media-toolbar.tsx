@@ -19,15 +19,18 @@ interface MediaToolbarProps {
   onShare(e: MouseEvent<HTMLButtonElement>): void;
 }
 
-/** The toolbar for two pictures or two recordings: their own tools, then undo, redo and sharing. */
+/** The toolbar for two pictures or two recordings: their own tools, then undo, redo and sharing, and last (as for documents) the list beside them. */
 export function MediaToolbar({ kind, media, sidebar, onSidebar, canUndo, canRedo, onUndo, onRedo, sharing, onShare }: Readonly<MediaToolbarProps>) {
   const { imageCtl, audioCtl } = media;
-  const right = (own: ReactNode) => (
+  const right = (own: ReactNode, list: string) => (
     <>
       {own}
       <div className="tgroup edit" role="group" aria-label="Edit">
         <HistoryTools canUndo={canUndo} canRedo={canRedo} onUndo={onUndo} onRedo={onRedo} />
         <ShareTool expanded={sharing} onClick={onShare} />
+      </div>
+      <div className="tgroup panel">
+        <Tool id="btn-sidebar" icon="sidebar" label={list} kbd="S" toggle pressed={sidebar} controls="changes" onClick={onSidebar} />
       </div>
     </>
   );
@@ -38,12 +41,7 @@ export function MediaToolbar({ kind, media, sidebar, onSidebar, canUndo, canRedo
       same={!!imageCtl.diff && !imageCtl.diff.changed}
       left={<ImageNav ctl={imageCtl} />}
       middle={<ImageModes ctl={imageCtl} annotatable />}
-      right={right(
-        <>
-          <ImageZoom ctl={imageCtl} />
-          <Tool id="btn-sidebar" icon="sidebar" label="Notes" kbd="S" toggle pressed={sidebar} controls="changes" onClick={onSidebar} />
-        </>,
-      )}
+      right={right(<ImageZoom ctl={imageCtl} />, 'Notes')}
     />
   ) : (
     <ToolbarFrame
@@ -52,12 +50,7 @@ export function MediaToolbar({ kind, media, sidebar, onSidebar, canUndo, canRedo
       same={!!audioCtl.sides && !audioCtl.busy && !audioCtl.differences.length}
       left={<AudioNav ctl={audioCtl} />}
       middle={<AudioModes ctl={audioCtl} />}
-      right={right(
-        <>
-          <AudioZoom ctl={audioCtl} />
-          <Tool id="btn-sidebar" icon="sidebar" label="List of differences" kbd="S" toggle pressed={sidebar} controls="changes" onClick={onSidebar} />
-        </>,
-      )}
+      right={right(<AudioZoom ctl={audioCtl} />, 'List of differences')}
     />
   );
 }

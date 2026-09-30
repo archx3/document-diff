@@ -263,11 +263,16 @@ test('the toolbar has the changes on the left, the view in the middle and editin
   expect(Math.abs(right.x + right.width - (bar.x + bar.width - 16))).toBeLessThan(2);
   expect(bar.height).toBeLessThan(60);
 
-  // Narrower, the three columns still fit on one line, the middle one centred.
-  await page.setViewportSize({ width: 1024, height: 800 });
+  // Short of room to centre the middle, it moves aside rather than run over the editing tools.
+  await page.setViewportSize({ width: 1200, height: 800 });
   expect((await box('#toolbar')).height).toBeLessThan(60);
-  const narrow = [await box('#toolbar'), await box('.tcol.middle')];
-  expect(Math.abs(narrow[1]!.x + narrow[1]!.width / 2 - (narrow[0]!.x + narrow[0]!.width / 2))).toBeLessThan(2);
+  const [m1, r1] = [await box('.tcol.middle'), await box('.tcol.right')];
+  expect(r1.x).toBeGreaterThanOrEqual(m1.x + m1.width);
+  // Narrower still, the view goes to a second row, centred under the other two.
+  await page.setViewportSize({ width: 1024, height: 800 });
+  const [bar2, m2, r2] = [await box('#toolbar'), await box('.tcol.middle'), await box('.tcol.right')];
+  expect(m2.y).toBeGreaterThanOrEqual(r2.y + r2.height);
+  expect(Math.abs(m2.x + m2.width / 2 - (bar2.x + bar2.width / 2))).toBeLessThan(2);
 });
 
 test('the toolbar buttons are borderless, like the app bar’s', async ({ page }) => {
