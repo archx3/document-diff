@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { alignFrames, findDifferences, timeMap } from '../../src/audio/align';
-import { features, fft, loudness, peaks, spectrogram } from '../../src/audio/analyze';
+import { featureRate, features, fft, loudness, peaks, spectrogram } from '../../src/audio/analyze';
 import { diffWords, heardWords, pairedSentences } from '../../src/audio/words';
 
 const RATE = 16000;
@@ -87,6 +87,19 @@ describe('audio differences', () => {
     // 2.5 s into A is 3.5 s into B, after the added second.
     expect(map.aToB(2.5)).toBeCloseTo(3.5, 0);
     expect(map.bToA(3.5)).toBeCloseTo(2.5, 0);
+  });
+
+  it('compares long recordings of different lengths at one frame rate, so what is the same stays the same', () => {
+    // Long enough to have fewer frames a second than usual (40 frames here, as 8000 are for 7 minutes or more).
+    const tune = (extra: number) => tones([[440, 1], [660, 1], [880, 1], [0, 0.5 + extra], [523, 1], [587, 1], [659, 1], [698, 1]]);
+    const [a, b] = [tune(0), tune(1)];
+    const fps = featureRate(Math.max(a.length, b.length) / RATE, 40);
+    const fa = features(a, RATE, fps);
+    const fb = features(b, RATE, fps);
+    expect(fa.fps).toBe(fb.fps);
+    expect(fa.fps).toBeLessThan(10);
+    // Only the longer pause: silence against silence is the same, so nothing at all.
+    expect(findDifferences(fa, fb, alignFrames(fa, fb))).toEqual([]);
   });
 
   it('finds what B removed', () => {

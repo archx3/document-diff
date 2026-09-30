@@ -128,9 +128,9 @@ export function spectrogram(samples: Float32Array, rate: number, frames: number,
 
 /* ------------------------------------------------------------- features */
 
-/** Frames per second the recordings are compared at, and the most frames a recording gets. */
+/** Frames per second the recordings are compared at, and the most frames a recording gets (three hours' worth: longer ones get fewer a second). */
 export const FEATURE_FPS = 20;
-const MAX_FRAMES = 8000;
+const MAX_FRAMES = FEATURE_FPS * 3 * 3600;
 const BANDS = 24;
 
 export interface Features {
@@ -169,10 +169,24 @@ function bandEdges(rate: number, size: number): number[] {
   return edges;
 }
 
-/** What a recording is compared by: loudness and spectral shape, frame by frame. */
-export function features(samples: Float32Array, rate: number): Features {
-  const duration = samples.length / rate;
-  const fps = Math.min(FEATURE_FPS, MAX_FRAMES / Math.max(duration, 1e-3));
+/**
+ * The frames a second two recordings are compared at, the longer lasting
+ * `duration` seconds: FEATURE_FPS, or fewer, so that neither has more than
+ * `maxFrames` frames. Both recordings must have the same: frames of
+ * different lengths don't line up, and the same sound would seem to differ.
+ */
+export function featureRate(duration: number, maxFrames = MAX_FRAMES): number {
+  return Math.min(FEATURE_FPS, maxFrames / Math.max(duration, 1e-3));
+}
+
+/**
+ * What a recording is compared by: loudness and spectral shape, frame by
+ * frame, at `fps` frames a second (featureRate). At fewer than FEATURE_FPS
+ * (a long recording), each frame's spectrum is the average of windows across
+ * the whole frame, one every 1/FEATURE_FPS s as at the full rate, so none of
+ * the sound goes unheard.
+ */
+export function features(samples: Float32Array, rate: number, fps = featureRate(samples.length / rate)): Features {
   const hop = rate / fps;
   const size = 1024;
   const frames = Math.max(1, Math.floor(samples.length / hop));
@@ -181,24 +195,32 @@ export function features(samples: Float32Array, rate: number): Features {
   const chroma = new Float32Array(frames * CHROMA);
   const edges = bandEdges(rate, size);
   const pitch = chromaBins(rate, size);
+  /** Windows a frame's spectrum is averaged over: one at the full frame rate. */
+  const windows = Math.max(1, Math.ceil(fps < FEATURE_FPS ? FEATURE_FPS / fps : 1));
+  const power = new Float64Array(size / 2);
   for (let f = 0; f < frames; f++) {
     const start = Math.round(f * hop);
     let sum = 0;
     const end = Math.min(samples.length, start + Math.round(hop));
     for (let i = start; i < end; i++) sum += samples[i]! * samples[i]!;
     level[f] = Math.max(-90, 10 * Math.log10(sum / Math.max(1, end - start) + 1e-12));
-    const s = spectrum(samples, Math.max(0, Math.min(start, samples.length - size)), size);
+    power.fill(0);
+    for (let w = 0; w < windows; w++) {
+      const at = start + Math.round((w * hop) / windows);
+      const sw = spectrum(samples, Math.max(0, Math.min(at, samples.length - size)), size);
+      for (let k = 0; k < sw.length; k++) power[k] = power[k]! + (sw[k]! * sw[k]!) / windows;
+    }
     let mean = 0;
     for (let b = 0; b < BANDS; b++) {
       let e = 0;
-      for (let k = edges[b]!; k < Math.max(edges[b]! + 1, edges[b + 1]!); k++) e += s[k]! * s[k]!;
+      for (let k = edges[b]!; k < Math.max(edges[b]! + 1, edges[b + 1]!); k++) e += power[k]!;
       const v = 10 * Math.log10(e + 1e-12);
       shape[f * BANDS + b] = v;
       mean += v;
     }
     mean /= BANDS;
     for (let b = 0; b < BANDS; b++) shape[f * BANDS + b] = shape[f * BANDS + b]! - mean;
-    for (let k = 0; k < pitch.length; k++) if (pitch[k]! >= 0) chroma[f * CHROMA + pitch[k]!] = chroma[f * CHROMA + pitch[k]!]! + s[k]! * s[k]!;
+    for (let k = 0; k < pitch.length; k++) if (pitch[k]! >= 0) chroma[f * CHROMA + pitch[k]!] = chroma[f * CHROMA + pitch[k]!]! + power[k]!;
   }
   return { fps, frames, level, shape, chroma };
 }

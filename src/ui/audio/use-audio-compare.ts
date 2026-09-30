@@ -8,7 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AudioDifference, TimeMap } from '../../audio/align';
 import { alignFrames, findDifferences, timeMap } from '../../audio/align';
 import type { Features } from '../../audio/analyze';
-import { features } from '../../audio/analyze';
+import { featureRate, features } from '../../audio/analyze';
 import type { DecodedAudio } from '../../audio/decode';
 import { ANALYSIS_RATE, decodeAudio } from '../../audio/decode';
 import type { TranscribeProgress, Transcript, Word } from '../../audio/transcribe';
@@ -297,8 +297,10 @@ export function useAudioCompare(docs: { a: Doc; b: Doc } | null, keeper?: Transc
     if (!sides) return;
     let live = true;
     const t = setTimeout(() => {
-      const fa = features(sides.a.decoded.mono, ANALYSIS_RATE);
-      const fb = features(sides.b.decoded.mono, ANALYSIS_RATE);
+      // One frame rate for both, from the longer (see featureRate).
+      const fps = featureRate(Math.max(sides.a.decoded.mono.length, sides.b.decoded.mono.length) / ANALYSIS_RATE);
+      const fa = features(sides.a.decoded.mono, ANALYSIS_RATE, fps);
+      const fb = features(sides.b.decoded.mono, ANALYSIS_RATE, fps);
       const path = alignFrames(fa, fb);
       if (live) setFeats({ a: fa, b: fb, path, map: timeMap(path, fa.fps, fb.fps) });
     }, 30);
