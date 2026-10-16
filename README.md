@@ -180,7 +180,3 @@ src/
 - **OpenDocument files** work the same way: copied paragraphs are imported with their automatic and named styles, list styles, fonts and pictures, list numbering continues across copied items, and names that must be unique (tables, frames, sections, notes) are renewed.
 - **PDFs** are read with pdf.js. With structure tags, the tag tree gives paragraphs, headings, lists, tables, notes and the table of contents directly. Without them, text runs are grouped into lines and paragraphs by baseline, spacing, indentation and font size; list markers, table columns, footnotes and running headers and footers are detected from the layout.
 - **Saving a PDF** turns the document into a pdfmake layout: list labels are written out as text so the numbering is the document's own, tables keep merged cells and header rows, and footnotes become numbered notes. The document is laid out twice: once to learn the page each heading and page field lands on, then again with those numbers filled in.
-
-## SVG Studio
-
-This repository also holds [SVG Studio](svg-studio/README.md), a separate in-browser SVG icon editor (pen and shape tools, scale and rotate tools, groups, drag-to-select). Run it with `npm run studio`.

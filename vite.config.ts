@@ -14,6 +14,6 @@ export default defineConfig(({ mode }) => ({
   },
   test: {
     environment: 'jsdom',
-    include: ['tests/unit/**/*.test.ts', 'svg-studio/tests/**/*.test.ts'],
+    include: ['tests/unit/**/*.test.ts'],
   },
 }));
