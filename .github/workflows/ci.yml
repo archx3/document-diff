@@ -26,3 +26,5 @@ jobs:
       # The browser tests also open the single-file build.
       - run: npm run build:single
       - run: npm run test:e2e
+      # SVG Studio (svg-studio/) builds and serves itself for its own browser tests.
+      - run: npm run studio:e2e

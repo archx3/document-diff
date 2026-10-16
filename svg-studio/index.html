@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SVG Studio</title>
+    <meta name="description" content="Draw and edit SVG icons in the browser: pen, shapes, grouping, scale, rotate, drag-to-select. Runs entirely in your browser." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M9 22l1.2-4.2L19 9.2 22.8 13 14 21.8z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E" />
+    <script>
+      try{var t=localStorage.getItem('svg-studio:theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <noscript>SVG Studio needs JavaScript.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

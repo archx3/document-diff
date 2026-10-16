@@ -7,6 +7,7 @@ playwright-report/
 .DS_Store
 tests/fixtures/out/
 dist-single-build/
+dist-studio/
 .next/
 out/
 next-env.d.ts
